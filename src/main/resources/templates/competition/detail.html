@@ -1,0 +1,64 @@
+<!DOCTYPE html>
+<html xmlns:th="http://www.thymeleaf.org">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title th:text="${competition.name} + ' - InlineData'">대회 상세 - InlineData</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; color: #333; line-height: 1.6; }
+        .container { max-width: 960px; margin: 0 auto; padding: 0 1rem; }
+        nav { background: #2c3e50; color: #fff; padding: 0.8rem 0; }
+        nav a { color: #ecf0f1; text-decoration: none; margin-right: 1.5rem; }
+        nav a:hover { color: #fff; text-decoration: underline; }
+        nav .nav-brand { font-weight: bold; font-size: 1.1rem; }
+        main { padding: 1.5rem 0; }
+        dl { margin: 1rem 0; }
+        dt { font-weight: 600; color: #555; margin-top: 0.8rem; }
+        dd { margin-left: 0; padding: 0.3rem 0; }
+        .btn { display: inline-block; padding: 0.4rem 1rem; border: none; border-radius: 4px; cursor: pointer; text-decoration: none; font-size: 0.9rem; }
+        .btn-secondary { background: #95a5a6; color: #fff; }
+        .btn-secondary:hover { background: #7f8c8d; }
+        .actions { margin-top: 1.5rem; }
+    </style>
+</head>
+<body>
+    <div th:replace="~{fragments/header :: header}"></div>
+    <main class="container">
+        <h1 th:text="${competition.name}">대회명</h1>
+        <dl>
+            <th:block th:if="${competition.startDate != null}">
+                <dt>대회기간</dt>
+                <dd>
+                    <span th:text="${competition.startDate}"></span>
+                    <span th:if="${competition.endDate != null}" th:text="' ~ ' + ${competition.endDate}"></span>
+                    <span th:if="${competition.durationDays != null}" th:text="'(' + ${competition.durationDays} + '일간)'"></span>
+                </dd>
+            </th:block>
+            <th:block th:if="${competition.venue != null}">
+                <dt>대회장소</dt>
+                <dd th:text="${competition.venue}"></dd>
+            </th:block>
+            <th:block th:if="${competition.venueDetail != null}">
+                <dt>경기장 상세</dt>
+                <dd th:text="${competition.venueDetail}"></dd>
+            </th:block>
+            <th:block th:if="${competition.host != null}">
+                <dt>주최</dt>
+                <dd th:text="${competition.host}"></dd>
+            </th:block>
+            <th:block th:if="${competition.organizer != null}">
+                <dt>주관</dt>
+                <dd th:text="${competition.organizer}"></dd>
+            </th:block>
+            <th:block th:if="${competition.notes != null and !competition.notes.isEmpty()}">
+                <dt>비고</dt>
+                <dd th:text="${competition.notes}"></dd>
+            </th:block>
+        </dl>
+        <div class="actions">
+            <a th:href="@{/competitions}" class="btn btn-secondary">목록으로</a>
+        </div>
+    </main>
+</body>
+</html>

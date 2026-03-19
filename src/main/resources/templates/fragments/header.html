@@ -1,0 +1,12 @@
+<!DOCTYPE html>
+<html xmlns:th="http://www.thymeleaf.org">
+<body>
+<nav th:fragment="header">
+    <div class="container">
+        <a href="/" class="nav-brand">InlineData</a>
+        <a th:href="@{/competitions}">대회 목록</a>
+        <a th:href="@{/admin/competitions}">관리자</a>
+    </div>
+</nav>
+</body>
+</html>

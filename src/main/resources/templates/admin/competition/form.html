@@ -1,0 +1,100 @@
+<!DOCTYPE html>
+<html xmlns:th="http://www.thymeleaf.org">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title th:text="${dto.id != null} ? '대회 수정 - InlineData' : '대회 등록 - InlineData'">대회 폼 - InlineData</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; color: #333; line-height: 1.6; }
+        .container { max-width: 960px; margin: 0 auto; padding: 0 1rem; }
+        nav { background: #2c3e50; color: #fff; padding: 0.8rem 0; }
+        nav a { color: #ecf0f1; text-decoration: none; margin-right: 1.5rem; }
+        nav a:hover { color: #fff; text-decoration: underline; }
+        nav .nav-brand { font-weight: bold; font-size: 1.1rem; }
+        main { padding: 1.5rem 0; }
+        .form-group { margin-bottom: 1rem; }
+        .form-group label { display: block; margin-bottom: 0.3rem; font-weight: 600; }
+        .form-group input, .form-group textarea { width: 100%; padding: 0.5rem; border: 1px solid #ccc; border-radius: 4px; font-size: 0.95rem; }
+        .form-group textarea { resize: vertical; min-height: 80px; }
+        .form-group .error { color: #e74c3c; font-size: 0.85rem; margin-top: 0.2rem; }
+        .form-row { display: flex; gap: 1rem; }
+        .form-row .form-group { flex: 1; }
+        .btn { display: inline-block; padding: 0.4rem 1rem; border: none; border-radius: 4px; cursor: pointer; text-decoration: none; font-size: 0.9rem; }
+        .btn-primary { background: #3498db; color: #fff; }
+        .btn-primary:hover { background: #2980b9; }
+        .btn-secondary { background: #95a5a6; color: #fff; }
+        .btn-secondary:hover { background: #7f8c8d; }
+        .actions { margin-top: 1.5rem; }
+        .actions > * { margin-right: 0.5rem; }
+    </style>
+</head>
+<body>
+    <div th:replace="~{fragments/header :: header}"></div>
+    <main class="container">
+        <h1 th:text="${dto.id != null} ? '대회 수정' : '대회 등록'">대회 폼</h1>
+
+        <form th:action="${dto.id != null} ? @{/admin/competitions/{id}(id=${dto.id})} : @{/admin/competitions}"
+              method="post" th:object="${dto}">
+
+            <div class="form-group">
+                <label for="name">대회명 *</label>
+                <input type="text" id="name" th:field="*{name}" maxlength="200" required>
+                <div class="error" th:if="${#fields.hasErrors('name')}" th:errors="*{name}"></div>
+            </div>
+
+            <div class="form-row">
+                <div class="form-group">
+                    <label for="startDate">대회기간 시작</label>
+                    <input type="date" id="startDate" th:field="*{startDate}">
+                </div>
+                <div class="form-group">
+                    <label for="endDate">대회기간 종료</label>
+                    <input type="date" id="endDate" th:field="*{endDate}">
+                </div>
+                <div class="form-group">
+                    <label for="durationDays">대회일수</label>
+                    <input type="number" id="durationDays" th:field="*{durationDays}" min="1">
+                </div>
+            </div>
+
+            <div class="form-row">
+                <div class="form-group">
+                    <label for="venue">대회장소</label>
+                    <input type="text" id="venue" th:field="*{venue}" maxlength="200">
+                    <div class="error" th:if="${#fields.hasErrors('venue')}" th:errors="*{venue}"></div>
+                </div>
+                <div class="form-group">
+                    <label for="venueDetail">경기장 상세</label>
+                    <input type="text" id="venueDetail" th:field="*{venueDetail}" maxlength="200" placeholder="예: 나주롤러경기장/200m 트랙">
+                    <div class="error" th:if="${#fields.hasErrors('venueDetail')}" th:errors="*{venueDetail}"></div>
+                </div>
+            </div>
+
+            <div class="form-row">
+                <div class="form-group">
+                    <label for="host">주최</label>
+                    <input type="text" id="host" th:field="*{host}" maxlength="100">
+                    <div class="error" th:if="${#fields.hasErrors('host')}" th:errors="*{host}"></div>
+                </div>
+                <div class="form-group">
+                    <label for="organizer">주관</label>
+                    <input type="text" id="organizer" th:field="*{organizer}" maxlength="100">
+                    <div class="error" th:if="${#fields.hasErrors('organizer')}" th:errors="*{organizer}"></div>
+                </div>
+            </div>
+
+            <div class="form-group">
+                <label for="notes">비고</label>
+                <textarea id="notes" th:field="*{notes}"></textarea>
+            </div>
+
+            <div class="actions">
+                <button type="submit" class="btn btn-primary" th:text="${dto.id != null} ? '수정' : '등록'">저장</button>
+                <a th:href="${dto.id != null} ? @{/admin/competitions/{id}(id=${dto.id})} : @{/admin/competitions}"
+                   class="btn btn-secondary">취소</a>
+            </div>
+        </form>
+    </main>
+</body>
+</html>
