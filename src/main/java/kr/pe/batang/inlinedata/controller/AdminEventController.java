@@ -44,10 +44,9 @@ public class AdminEventController {
 
     @GetMapping("/{id}")
     public String detail(@PathVariable Long compId, @PathVariable Long id, Model model) {
-        Event event = eventService.findById(id);
         model.addAttribute("competition", competitionService.findById(compId));
-        model.addAttribute("event", event);
-        model.addAttribute("heats", eventService.findHeatsByEventId(id));
+        model.addAttribute("event", eventService.findById(id));
+        model.addAttribute("heatsWithEntries", eventService.findHeatsWithEntries(id));
         return "admin/event/detail";
     }
 

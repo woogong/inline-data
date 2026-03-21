@@ -81,7 +81,10 @@
                                 <a th:href="@{/admin/competitions/{compId}/events/{id}(compId=${competition.id}, id=${e.id})}"
                                    th:text="${e.divisionName}"></a>
                             </td>
-                            <td th:text="${e.eventName}"></td>
+                            <td>
+                                <a th:href="@{/admin/competitions/{compId}/events/{id}(compId=${competition.id}, id=${e.id})}"
+                                   th:text="${e.eventName}"></a>
+                            </td>
                             <td th:text="${e.round}"></td>
                         </tr>
                     </tbody>

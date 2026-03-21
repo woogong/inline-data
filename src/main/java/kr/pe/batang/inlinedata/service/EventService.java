@@ -12,7 +12,10 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Map;
+import java.util.stream.Collectors;
 
 @Service
 @RequiredArgsConstructor
@@ -39,6 +42,22 @@ public class EventService {
 
     public List<HeatEntry> findEntriesByHeatId(Long heatId) {
         return heatEntryRepository.findByHeatIdOrderByBibNumberAsc(heatId);
+    }
+
+    public Map<EventHeat, List<HeatEntry>> findHeatsWithEntries(Long eventId) {
+        List<EventHeat> heats = eventHeatRepository.findByEventIdOrderByHeatNumberAsc(eventId);
+        if (heats.isEmpty()) {
+            return Map.of();
+        }
+        List<Long> heatIds = heats.stream().map(EventHeat::getId).toList();
+        List<HeatEntry> entries = heatEntryRepository.findByHeatIdsWithDetails(heatIds);
+        Map<Long, List<HeatEntry>> entriesByHeatId = entries.stream()
+                .collect(Collectors.groupingBy(he -> he.getHeat().getId()));
+        Map<EventHeat, List<HeatEntry>> result = new LinkedHashMap<>();
+        for (EventHeat heat : heats) {
+            result.put(heat, entriesByHeatId.getOrDefault(heat.getId(), List.of()));
+        }
+        return result;
     }
 
     @Transactional
