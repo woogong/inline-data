@@ -28,6 +28,7 @@ class CompetitionControllerTest {
     private Competition createCompetition() {
         return Competition.builder()
                 .name("테스트 대회")
+                .shortName("테스트")
                 .startDate(LocalDate.of(2025, 6, 20))
                 .endDate(LocalDate.of(2025, 6, 22))
                 .durationDays(3)

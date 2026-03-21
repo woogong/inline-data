@@ -1,6 +1,6 @@
 package kr.pe.batang.inlinedata.service;
 
-import kr.pe.batang.inlinedata.controller.CompetitionFormDto;
+import kr.pe.batang.inlinedata.controller.dto.CompetitionFormDto;
 import kr.pe.batang.inlinedata.entity.Competition;
 import kr.pe.batang.inlinedata.repository.CompetitionRepository;
 import lombok.RequiredArgsConstructor;
@@ -35,6 +35,8 @@ public class CompetitionService {
         Competition competition = findById(id);
         competition.update(
                 dto.getName(),
+                dto.getShortName(),
+                dto.getEdition(),
                 dto.getStartDate(),
                 dto.getEndDate(),
                 dto.getDurationDays(),

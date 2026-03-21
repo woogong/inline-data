@@ -1,4 +1,5 @@
 package kr.pe.batang.inlinedata.controller;
+import kr.pe.batang.inlinedata.controller.dto.CompetitionFormDto;
 
 import jakarta.validation.Valid;
 import kr.pe.batang.inlinedata.entity.Competition;

@@ -27,17 +27,17 @@
 
 | 종목명 | 설명 |
 |---|---|
-| 500m+D | 500미터 + 더블(2바퀴) |
+| 500m+D | 500m+D |
 | 300m | 300미터 |
 | 200m | 200미터 |
 | 1,000m | 1000미터 |
 | DTT200m | 듀얼 타임 트라이얼 200미터 |
-| E10,000m | 엘리미네이션 10,000미터 |
-| EP1,600m | 엘리미네이션 포인트 1,600미터 |
-| EP5,000m | 엘리미네이션 포인트 5,000미터 |
+| E10,000m | 제외 10,000미터 |
+| EP1,600m | 제외 포인트 1,600미터 |
+| EP5,000m | 제외 포인트 5,000미터 |
 | P3,000m | 포인트 3,000미터 |
 | P5,000m | 포인트 5,000미터 |
-| E3,000m | 엘리미네이션 3,000미터 |
+| E3,000m | 제외 3,000미터 |
 | 계주3,000m | 계주 3,000미터 (팀) |
 | 계주2,000m | 계주 2,000미터 (팀) |
 
@@ -53,11 +53,16 @@
 
 ### 1.4 선수 정보 구조
 
-각 선수는 다음 정보를 가진다:
-- **번호(Bib)**: 종목별로 부여되는 배번 (예: 4)
+선수는 특정 대회에 종속되지 않고 지속적으로 관리되는 마스터 데이터이다. 대회 참가 정보는 별도로 관리한다.
+
+**선수 기본 정보 (대회 독립):**
 - **이름(Name)**: 선수명 (예: 구예림)
-- **시도(Region)**: 소속 지역 (예: 경기, 충남, 경북 등)
-- **소속(Affiliation)**: 팀/학교/클럽명 (예: 팀에스, 논산내동초등학교 등)
+- **성별(Gender)**: M/F
+- **소속(Team)**: 팀/학교/클럽 (예: 팀에스, 논산내동초등학교 등)
+
+**대회 참가 정보 (대회별):**
+- **번호(Bib)**: 종목별로 부여되는 배번 (예: 4)
+- **소속(Team)**: 출전 시 소속 팀 (이적 등으로 변경될 수 있음, 무소속 가능)
 - **학년/기수(Grade)**: 소속명 뒤에 붙는 숫자 (예: 6 → 6학년)
 
 ### 1.5 경기 번호 체계
@@ -75,11 +80,13 @@ PDF의 경기는 1번부터 152번까지 순번이 매겨져 있으며, 3일간 
 
 ```
 Competition (대회)
+ ├── CompetitionEntry (대회 참가 선수)
+ │    ├── Athlete (선수) ── 마스터 데이터
+ │    └── Team (소속) ── nullable
  └── Event (종목/경기)
       └── EventHeat (조)
-           └── HeatEntry (출전 선수)
-                └── Athlete (선수)
-                     └── Team (소속)
+           └── HeatEntry (출전 엔트리)
+                └── CompetitionEntry (대회 참가 선수)
 ```
 
 ### 2.2 Entity 상세
@@ -91,23 +98,36 @@ Competition (대회)
 | PK | `id` | `Long` | `@GeneratedValue(IDENTITY)` |
 | 소속명 | `name` | `String` | not null, length 100 (예: 팀에스, THE LAP) |
 | 시도 | `region` | `String` | not null, length 20 (예: 경기, 충남, 부산) |
-| 소속유형 | `type` | `String` | nullable, length 20 (초등학교/중학교/고등학교/대학교/클럽/시청 등) |
 | 생성일시 | `createdAt` | `LocalDateTime` | `@CreatedDate` |
 | 수정일시 | `updatedAt` | `LocalDateTime` | `@LastModifiedDate` |
 
-- unique 제약: (name, region) 조합
+#### Athlete (선수) — 마스터 데이터
 
-#### Athlete (선수)
+대회와 무관하게 지속적으로 관리되는 선수 기본 정보.
 
 | 필드 | Java 필드명 | 타입 | 비고 |
 |---|---|---|---|
 | PK | `id` | `Long` | `@GeneratedValue(IDENTITY)` |
 | 이름 | `name` | `String` | not null, length 50 |
 | 성별 | `gender` | `String` | not null (M/F) |
-| 소속 | `team` | `Team` | `@ManyToOne`, FK |
+| 생성일시 | `createdAt` | `LocalDateTime` | `@CreatedDate` |
+| 수정일시 | `updatedAt` | `LocalDateTime` | `@LastModifiedDate` |
+
+#### CompetitionEntry (대회 참가 정보)
+
+특정 대회에 참가하는 선수의 대회별 정보. 이적, 학년 변동 등을 반영한다.
+
+| 필드 | Java 필드명 | 타입 | 비고 |
+|---|---|---|---|
+| PK | `id` | `Long` | `@GeneratedValue(IDENTITY)` |
+| 대회 | `competition` | `Competition` | `@ManyToOne`, FK |
+| 선수 | `athlete` | `Athlete` | `@ManyToOne`, FK |
+| 소속 | `team` | `Team` | `@ManyToOne`, FK, nullable (무소속 가능) |
 | 학년/기수 | `grade` | `Integer` | nullable (예: 6 → 6학년 또는 기수) |
 | 생성일시 | `createdAt` | `LocalDateTime` | `@CreatedDate` |
 | 수정일시 | `updatedAt` | `LocalDateTime` | `@LastModifiedDate` |
+
+- unique 제약: (competition, athlete) 조합
 
 #### Event (종목/경기)
 
@@ -119,12 +139,10 @@ Competition (대회)
 | 대회 | `competition` | `Competition` | `@ManyToOne`, FK |
 | 경기번호 | `eventNumber` | `Integer` | not null (PDF 순번: 1~152) |
 | 부별명 | `divisionName` | `String` | not null, length 50 (예: 여초부 5,6학년) |
-| 성별 | `gender` | `String` | not null (M/F) |
-| 연령대 | `ageGroup` | `String` | not null, length 30 (예: 초등부 5,6학년, 중등부, 고등부) |
-| 레벨 | `level` | `String` | nullable (일반(B조) 등, 없으면 선수부) |
-| 거리/유형 | `distance` | `String` | not null, length 30 (예: 500m+D, DTT200m) |
-| 라운드 | `round` | `String` | not null, length 20 (예선/준준결승/준결승/결승/조별결승) |
-| 대회일차 | `dayNumber` | `Integer` | not null (1, 2, 3) |
+| 성별 | `gender` | `String` | not null (M/F/X) X=혼성 |
+| 종목명 | `eventName` | `String` | not null, length 30 (예: 500m+D, DTT200m) |
+| 라운드 | `round` | `String` | nullable, length 20 (예선/준준결승/준결승/결승/조별결승) |
+| 대회일차 | `dayNumber` | `Integer` | nullable (1, 2, 3) |
 | 생성일시 | `createdAt` | `LocalDateTime` | `@CreatedDate` |
 | 수정일시 | `updatedAt` | `LocalDateTime` | `@LastModifiedDate` |
 
@@ -147,7 +165,7 @@ Competition (대회)
 |---|---|---|---|
 | PK | `id` | `Long` | `@GeneratedValue(IDENTITY)` |
 | 조 | `heat` | `EventHeat` | `@ManyToOne`, FK |
-| 선수 | `athlete` | `Athlete` | `@ManyToOne`, FK |
+| 대회참가선수 | `entry` | `CompetitionEntry` | `@ManyToOne`, FK |
 | 배번 | `bibNumber` | `Integer` | not null (종목 내 선수 번호) |
 
 ---

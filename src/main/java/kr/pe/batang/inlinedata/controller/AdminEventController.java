@@ -1,0 +1,85 @@
+package kr.pe.batang.inlinedata.controller;
+import kr.pe.batang.inlinedata.controller.dto.EventFormDto;
+
+import jakarta.validation.Valid;
+import kr.pe.batang.inlinedata.entity.Event;
+import kr.pe.batang.inlinedata.service.CompetitionService;
+import kr.pe.batang.inlinedata.service.EventService;
+import lombok.RequiredArgsConstructor;
+import org.springframework.stereotype.Controller;
+import org.springframework.ui.Model;
+import org.springframework.validation.BindingResult;
+import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.ModelAttribute;
+import org.springframework.web.bind.annotation.PathVariable;
+import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.RequestMapping;
+
+@Controller
+@RequestMapping("/admin/competitions/{compId}/events")
+@RequiredArgsConstructor
+public class AdminEventController {
+
+    private final EventService eventService;
+    private final CompetitionService competitionService;
+
+    @GetMapping
+    public String list(@PathVariable Long compId, Model model) {
+        model.addAttribute("competition", competitionService.findById(compId));
+        model.addAttribute("events", eventService.findByCompetitionId(compId));
+        return "admin/event/list";
+    }
+
+    @GetMapping("/{id}")
+    public String detail(@PathVariable Long compId, @PathVariable Long id, Model model) {
+        Event event = eventService.findById(id);
+        model.addAttribute("competition", competitionService.findById(compId));
+        model.addAttribute("event", event);
+        model.addAttribute("heats", eventService.findHeatsByEventId(id));
+        return "admin/event/detail";
+    }
+
+    @GetMapping("/new")
+    public String createForm(@PathVariable Long compId, Model model) {
+        model.addAttribute("competition", competitionService.findById(compId));
+        model.addAttribute("dto", new EventFormDto());
+        return "admin/event/form";
+    }
+
+    @PostMapping
+    public String create(@PathVariable Long compId, @Valid @ModelAttribute("dto") EventFormDto dto,
+                         BindingResult bindingResult, Model model) {
+        if (bindingResult.hasErrors()) {
+            model.addAttribute("competition", competitionService.findById(compId));
+            return "admin/event/form";
+        }
+        eventService.create(compId, dto);
+        return "redirect:/admin/competitions/" + compId + "/events";
+    }
+
+    @GetMapping("/{id}/edit")
+    public String editForm(@PathVariable Long compId, @PathVariable Long id, Model model) {
+        Event event = eventService.findById(id);
+        model.addAttribute("competition", competitionService.findById(compId));
+        model.addAttribute("dto", EventFormDto.from(event));
+        return "admin/event/form";
+    }
+
+    @PostMapping("/{id}")
+    public String update(@PathVariable Long compId, @PathVariable Long id,
+                         @Valid @ModelAttribute("dto") EventFormDto dto,
+                         BindingResult bindingResult, Model model) {
+        if (bindingResult.hasErrors()) {
+            model.addAttribute("competition", competitionService.findById(compId));
+            return "admin/event/form";
+        }
+        eventService.update(id, dto);
+        return "redirect:/admin/competitions/" + compId + "/events/" + id;
+    }
+
+    @PostMapping("/{id}/delete")
+    public String delete(@PathVariable Long compId, @PathVariable Long id) {
+        eventService.delete(id);
+        return "redirect:/admin/competitions/" + compId + "/events";
+    }
+}

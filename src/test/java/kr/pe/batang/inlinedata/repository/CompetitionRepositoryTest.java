@@ -21,6 +21,7 @@ class CompetitionRepositoryTest {
     private Competition createCompetition(String name) {
         return Competition.builder()
                 .name(name)
+                .shortName("테스트")
                 .startDate(LocalDate.of(2025, 6, 20))
                 .endDate(LocalDate.of(2025, 6, 22))
                 .durationDays(3)

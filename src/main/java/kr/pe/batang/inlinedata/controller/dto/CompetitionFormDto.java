@@ -1,4 +1,4 @@
-package kr.pe.batang.inlinedata.controller;
+package kr.pe.batang.inlinedata.controller.dto;
 
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.Size;
@@ -20,6 +20,12 @@ public class CompetitionFormDto {
     @NotBlank(message = "대회명은 필수입니다.")
     @Size(max = 200, message = "대회명은 200자 이내여야 합니다.")
     private String name;
+
+    @NotBlank(message = "간략명은 필수입니다.")
+    @Size(max = 50, message = "간략명은 50자 이내여야 합니다.")
+    private String shortName;
+
+    private Integer edition;
 
     @DateTimeFormat(pattern = "yyyy-MM-dd")
     private LocalDate startDate;
@@ -46,6 +52,8 @@ public class CompetitionFormDto {
     public Competition toEntity() {
         return Competition.builder()
                 .name(name)
+                .shortName(shortName)
+                .edition(edition)
                 .startDate(startDate)
                 .endDate(endDate)
                 .durationDays(durationDays)
@@ -61,6 +69,8 @@ public class CompetitionFormDto {
         CompetitionFormDto dto = new CompetitionFormDto();
         dto.setId(competition.getId());
         dto.setName(competition.getName());
+        dto.setShortName(competition.getShortName());
+        dto.setEdition(competition.getEdition());
         dto.setStartDate(competition.getStartDate());
         dto.setEndDate(competition.getEndDate());
         dto.setDurationDays(competition.getDurationDays());
