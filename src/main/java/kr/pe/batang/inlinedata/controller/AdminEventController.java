@@ -15,6 +15,11 @@ import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestMapping;
 
+import java.util.List;
+import java.util.Map;
+import java.util.TreeMap;
+import java.util.stream.Collectors;
+
 @Controller
 @RequestMapping("/admin/competitions/{compId}/events")
 @RequiredArgsConstructor
@@ -25,8 +30,15 @@ public class AdminEventController {
 
     @GetMapping
     public String list(@PathVariable Long compId, Model model) {
+        List<Event> events = eventService.findByCompetitionId(compId);
+        Map<Integer, List<Event>> eventsByDay = events.stream()
+                .collect(Collectors.groupingBy(
+                        e -> e.getDayNumber() != null ? e.getDayNumber() : 0,
+                        TreeMap::new,
+                        Collectors.toList()
+                ));
         model.addAttribute("competition", competitionService.findById(compId));
-        model.addAttribute("events", eventService.findByCompetitionId(compId));
+        model.addAttribute("eventsByDay", eventsByDay);
         return "admin/event/list";
     }
 
