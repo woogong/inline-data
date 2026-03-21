@@ -1,4 +1,5 @@
 package kr.pe.batang.inlinedata.controller;
+import kr.pe.batang.inlinedata.controller.dto.CompetitionFormDto;
 
 import kr.pe.batang.inlinedata.entity.Competition;
 import kr.pe.batang.inlinedata.service.CompetitionService;
@@ -32,6 +33,7 @@ class AdminCompetitionControllerTest {
     private Competition createCompetition() {
         return Competition.builder()
                 .name("테스트 대회")
+                .shortName("테스트")
                 .startDate(LocalDate.of(2025, 6, 20))
                 .endDate(LocalDate.of(2025, 6, 22))
                 .durationDays(3)
@@ -78,7 +80,8 @@ class AdminCompetitionControllerTest {
         given(competitionService.create(any(CompetitionFormDto.class))).willReturn(createCompetition());
 
         mockMvc.perform(post("/admin/competitions")
-                        .param("name", "신규 대회"))
+                        .param("name", "신규 대회")
+                        .param("shortName", "신규"))
                 .andExpect(status().is3xxRedirection())
                 .andExpect(redirectedUrl("/admin/competitions"));
     }
@@ -109,7 +112,8 @@ class AdminCompetitionControllerTest {
         given(competitionService.update(eq(1L), any(CompetitionFormDto.class))).willReturn(createCompetition());
 
         mockMvc.perform(post("/admin/competitions/1")
-                        .param("name", "수정된 대회"))
+                        .param("name", "수정된 대회")
+                        .param("shortName", "수정"))
                 .andExpect(status().is3xxRedirection())
                 .andExpect(redirectedUrl("/admin/competitions/1"));
     }

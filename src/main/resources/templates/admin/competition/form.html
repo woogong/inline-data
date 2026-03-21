@@ -44,6 +44,18 @@
             </div>
 
             <div class="form-row">
+                <div class="form-group" style="flex:2">
+                    <label for="shortName">간략명 *</label>
+                    <input type="text" id="shortName" th:field="*{shortName}" maxlength="50" required placeholder="예: 제45회 종별대회">
+                    <div class="error" th:if="${#fields.hasErrors('shortName')}" th:errors="*{shortName}"></div>
+                </div>
+                <div class="form-group" style="flex:1">
+                    <label for="edition">회차</label>
+                    <input type="number" id="edition" th:field="*{edition}" min="1" placeholder="예: 45">
+                </div>
+            </div>
+
+            <div class="form-row">
                 <div class="form-group">
                     <label for="startDate">대회기간 시작</label>
                     <input type="date" id="startDate" th:field="*{startDate}">

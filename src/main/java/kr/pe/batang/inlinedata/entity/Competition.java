@@ -34,6 +34,11 @@ public class Competition {
     @Column(nullable = false, length = 200)
     private String name;
 
+    @Column(nullable = false, length = 50)
+    private String shortName;
+
+    private Integer edition;
+
     private LocalDate startDate;
 
     private LocalDate endDate;
@@ -64,10 +69,12 @@ public class Competition {
     private LocalDateTime updatedAt;
 
     @Builder
-    public Competition(String name, LocalDate startDate, LocalDate endDate, Integer durationDays,
+    public Competition(String name, String shortName, Integer edition, LocalDate startDate, LocalDate endDate, Integer durationDays,
                        String venue, String venueDetail, String host,
                        String organizer, String notes) {
         this.name = name;
+        this.shortName = shortName;
+        this.edition = edition;
         this.startDate = startDate;
         this.endDate = endDate;
         this.durationDays = durationDays;
@@ -78,10 +85,12 @@ public class Competition {
         this.notes = notes;
     }
 
-    public void update(String name, LocalDate startDate, LocalDate endDate, Integer durationDays,
+    public void update(String name, String shortName, Integer edition, LocalDate startDate, LocalDate endDate, Integer durationDays,
                        String venue, String venueDetail, String host,
                        String organizer, String notes) {
         this.name = name;
+        this.shortName = shortName;
+        this.edition = edition;
         this.startDate = startDate;
         this.endDate = endDate;
         this.durationDays = durationDays;

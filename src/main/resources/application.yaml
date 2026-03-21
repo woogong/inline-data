@@ -2,9 +2,9 @@ spring:
   application:
     name: inlinedata
   datasource:
-    url: jdbc:mariadb://localhost:3306/inlinedata
+    url: jdbc:mariadb://localhost:3306/inlinedata?useUnicode=true&characterEncoding=UTF-8
     username: root
-    password:
+    password: parksj11
     driver-class-name: org.mariadb.jdbc.Driver
   jpa:
     hibernate:

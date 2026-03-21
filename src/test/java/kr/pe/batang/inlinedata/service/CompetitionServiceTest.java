@@ -1,6 +1,6 @@
 package kr.pe.batang.inlinedata.service;
 
-import kr.pe.batang.inlinedata.controller.CompetitionFormDto;
+import kr.pe.batang.inlinedata.controller.dto.CompetitionFormDto;
 import kr.pe.batang.inlinedata.entity.Competition;
 import kr.pe.batang.inlinedata.repository.CompetitionRepository;
 import org.junit.jupiter.api.DisplayName;
@@ -32,6 +32,7 @@ class CompetitionServiceTest {
     private CompetitionFormDto createDto() {
         CompetitionFormDto dto = new CompetitionFormDto();
         dto.setName("테스트 대회");
+        dto.setShortName("테스트");
         dto.setStartDate(LocalDate.of(2025, 6, 20));
         dto.setEndDate(LocalDate.of(2025, 6, 22));
         dto.setDurationDays(3);
@@ -44,6 +45,7 @@ class CompetitionServiceTest {
     private Competition createCompetition() {
         return Competition.builder()
                 .name("테스트 대회")
+                .shortName("테스트")
                 .startDate(LocalDate.of(2025, 6, 20))
                 .endDate(LocalDate.of(2025, 6, 22))
                 .durationDays(3)

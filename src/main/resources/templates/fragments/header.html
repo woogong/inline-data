@@ -4,8 +4,11 @@
 <nav th:fragment="header">
     <div class="container">
         <a href="/" class="nav-brand">InlineData</a>
-        <a th:href="@{/competitions}">대회 목록</a>
-        <a th:href="@{/admin/competitions}">관리자</a>
+        <a th:href="@{/competitions}">대회</a>
+        <a th:href="@{/athletes}">선수</a>
+        <a th:href="@{/admin/competitions}">대회 관리</a>
+        <a th:href="@{/admin/teams}">소속 관리</a>
+        <a th:href="@{/admin/athletes}">선수 관리</a>
     </div>
 </nav>
 </body>
