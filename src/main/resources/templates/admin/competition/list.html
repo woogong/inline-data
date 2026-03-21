@@ -38,13 +38,13 @@
                     <th>대회명</th>
                     <th>대회기간</th>
                     <th>장소</th>
-                    <th>등록일</th>
+                    <th>종목</th>
                 </tr>
             </thead>
             <tbody>
                 <tr th:each="c : ${competitions}">
                     <td th:text="${c.id}"></td>
-                    <td><a th:href="@{/admin/competitions/{id}(id=${c.id})}" th:text="${c.name}"></a></td>
+                    <td><a th:href="@{/admin/competitions/{id}(id=${c.id})}" th:text="${(c.edition != null ? '제' + c.edition + '회 ' : '') + c.shortName}"></a></td>
                     <td>
                         <span th:if="${c.startDate != null and c.endDate != null}"
                               th:text="${c.startDate} + ' ~ ' + ${c.endDate}"></span>
@@ -52,7 +52,7 @@
                               th:text="${c.startDate}"></span>
                     </td>
                     <td th:text="${c.venue}"></td>
-                    <td th:text="${#temporals.format(c.createdAt, 'yyyy-MM-dd')}"></td>
+                    <td><a th:href="@{/admin/competitions/{id}/events(id=${c.id})}">종목</a></td>
                 </tr>
                 <tr th:if="${#lists.isEmpty(competitions)}">
                     <td colspan="5" style="text-align:center; color:#999;">등록된 대회가 없습니다.</td>
