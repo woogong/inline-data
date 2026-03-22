@@ -4,7 +4,9 @@ import kr.pe.batang.inlinedata.controller.dto.AthleteFormDto;
 import jakarta.validation.Valid;
 import kr.pe.batang.inlinedata.entity.Athlete;
 import kr.pe.batang.inlinedata.service.AthleteService;
+import kr.pe.batang.inlinedata.service.EntryParsingService;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Controller;
 import org.springframework.ui.Model;
 import org.springframework.validation.BindingResult;
@@ -14,14 +16,20 @@ import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
+import org.springframework.web.multipart.MultipartFile;
 import org.springframework.web.servlet.mvc.support.RedirectAttributes;
 
+import java.nio.file.Files;
+import java.nio.file.Path;
+
+@Slf4j
 @Controller
 @RequestMapping("/admin/athletes")
 @RequiredArgsConstructor
 public class AdminAthleteController {
 
     private final AthleteService athleteService;
+    private final EntryParsingService entryParsingService;
 
     @GetMapping
     public String list(@RequestParam(required = false) String name,
@@ -93,6 +101,23 @@ public class AdminAthleteController {
     @PostMapping("/{id}/delete-force")
     public String deleteForce(@PathVariable Long id) {
         athleteService.deleteForce(id);
+        return "redirect:/admin/athletes";
+    }
+
+    @PostMapping("/import")
+    public String importFromEntry(@RequestParam("file") MultipartFile file, RedirectAttributes redirectAttributes) {
+        try {
+            Path tempFile = Files.createTempFile("entry-", ".pdf");
+            file.transferTo(tempFile);
+            EntryParsingService.ImportResult result = entryParsingService.parseEntryPdf(tempFile);
+            Files.deleteIfExists(tempFile);
+            redirectAttributes.addFlashAttribute("message",
+                    result.created() + "명의 선수를 등록했습니다. (중복 " + result.skipped() + "명 제외)");
+        } catch (Exception e) {
+            log.error("엔트리 파일 파싱 실패: {}", file.getOriginalFilename(), e);
+            redirectAttributes.addFlashAttribute("errorMessage",
+                    "파일 처리 중 오류가 발생했습니다: " + e.getMessage());
+        }
         return "redirect:/admin/athletes";
     }
 }
