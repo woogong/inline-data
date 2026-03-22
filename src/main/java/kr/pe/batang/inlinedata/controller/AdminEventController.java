@@ -14,6 +14,9 @@ import org.springframework.web.bind.annotation.ModelAttribute;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RequestBody;
+import org.springframework.web.bind.annotation.RequestParam;
+import org.springframework.web.bind.annotation.ResponseBody;
 
 import java.util.List;
 import java.util.Map;
@@ -47,7 +50,27 @@ public class AdminEventController {
         model.addAttribute("competition", competitionService.findById(compId));
         model.addAttribute("event", eventService.findById(id));
         model.addAttribute("heatsWithEntries", eventService.findHeatsWithEntries(id));
+        model.addAttribute("resultByEntryId", eventService.findResultsByEntryId(id));
         return "admin/event/detail";
+    }
+
+    @PostMapping("/{id}/results/save")
+    @ResponseBody
+    public Map<String, Object> saveResultApi(@PathVariable Long compId, @PathVariable Long id,
+                                             @RequestBody Map<String, String> body) {
+        Long heatEntryId = Long.parseLong(body.get("heatEntryId"));
+        String rankingStr = body.getOrDefault("ranking", "");
+        Integer ranking = rankingStr.isBlank() ? null : Integer.parseInt(rankingStr);
+        String record = blankToNull(body.get("record"));
+        String newRecord = blankToNull(body.get("newRecord"));
+        String qualification = blankToNull(body.get("qualification"));
+        String note = blankToNull(body.get("note"));
+        eventService.saveResult(heatEntryId, ranking, record, newRecord, qualification, note);
+        return Map.of("status", "ok");
+    }
+
+    private String blankToNull(String s) {
+        return s == null || s.isBlank() ? null : s.trim();
     }
 
     @GetMapping("/new")

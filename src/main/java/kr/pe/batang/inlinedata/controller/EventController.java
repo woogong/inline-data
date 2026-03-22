@@ -41,7 +41,13 @@ public class EventController {
     public String detail(@PathVariable Long compId, @PathVariable Long id, Model model) {
         model.addAttribute("competition", competitionService.findById(compId));
         model.addAttribute("event", eventService.findById(id));
-        model.addAttribute("heatsWithEntries", eventService.findHeatsWithEntries(id));
+        boolean hasResults = eventService.hasResults(id);
+        model.addAttribute("hasResults", hasResults);
+        if (hasResults) {
+            model.addAttribute("heatsWithResults", eventService.findHeatsWithResults(id));
+        } else {
+            model.addAttribute("heatsWithEntries", eventService.findHeatsWithEntries(id));
+        }
         return "event/detail";
     }
 }
