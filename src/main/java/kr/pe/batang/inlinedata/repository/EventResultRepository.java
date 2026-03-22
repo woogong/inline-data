@@ -15,7 +15,7 @@ public interface EventResultRepository extends JpaRepository<EventResult, Long> 
     @Query("SELECT er FROM EventResult er " +
            "JOIN FETCH er.heatEntry he " +
            "JOIN FETCH he.entry ce " +
-           "JOIN FETCH ce.athlete " +
+           "LEFT JOIN FETCH ce.athlete " +
            "LEFT JOIN FETCH ce.team " +
            "WHERE he.heat.id IN :heatIds " +
            "ORDER BY he.heat.id, er.ranking")

@@ -13,4 +13,9 @@ public interface CompetitionEntryRepository extends JpaRepository<CompetitionEnt
     List<CompetitionEntry> findByAthleteId(Long athleteId);
 
     Optional<CompetitionEntry> findByCompetitionIdAndAthleteId(Long competitionId, Long athleteId);
+
+    Optional<CompetitionEntry> findByCompetitionIdAndAthleteNameAndGenderAndTeamName(
+            Long competitionId, String athleteName, String gender, String teamName);
+
+    List<CompetitionEntry> findByCompetitionIdAndAthleteIsNull(Long competitionId);
 }

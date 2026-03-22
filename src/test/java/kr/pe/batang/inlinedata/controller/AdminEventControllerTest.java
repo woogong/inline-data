@@ -4,6 +4,7 @@ import kr.pe.batang.inlinedata.controller.dto.EventFormDto;
 import kr.pe.batang.inlinedata.entity.Competition;
 import kr.pe.batang.inlinedata.entity.Event;
 import kr.pe.batang.inlinedata.service.CompetitionService;
+import kr.pe.batang.inlinedata.service.EntryImportService;
 import kr.pe.batang.inlinedata.service.EntryService;
 import kr.pe.batang.inlinedata.service.EventService;
 import org.junit.jupiter.api.DisplayName;
@@ -29,14 +30,10 @@ class AdminEventControllerTest {
     @Autowired
     private MockMvc mockMvc;
 
-    @MockitoBean
-    private EventService eventService;
-
-    @MockitoBean
-    private CompetitionService competitionService;
-
-    @MockitoBean
-    private EntryService entryService;
+    @MockitoBean private EventService eventService;
+    @MockitoBean private CompetitionService competitionService;
+    @MockitoBean private EntryService entryService;
+    @MockitoBean private EntryImportService entryImportService;
 
     private Competition createCompetition() {
         return Competition.builder().name("테스트 대회").shortName("테스트").build();
@@ -45,12 +42,9 @@ class AdminEventControllerTest {
     private Event createEvent() {
         return Event.builder()
                 .competition(createCompetition())
-                .eventNumber(1)
                 .divisionName("여초부 5,6학년")
                 .gender("F")
                 .eventName("500m+D")
-                .round("예선")
-                .dayNumber(1)
                 .build();
     }
 
@@ -72,7 +66,6 @@ class AdminEventControllerTest {
         given(eventService.create(eq(1L), any(EventFormDto.class))).willReturn(createEvent());
 
         mockMvc.perform(post("/admin/competitions/1/events")
-                        .param("eventNumber", "1")
                         .param("divisionName", "여초부 5,6학년")
                         .param("gender", "F")
                         .param("eventName", "500m+D"))

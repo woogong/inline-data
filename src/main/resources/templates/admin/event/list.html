@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title th:text="${(competition.edition != null ? '제' + competition.edition + '회 ' : '') + competition.shortName} + ' 종목 관리 - InlineData'">종목 관리 - InlineData</title>
+    <title>종목 관리 - InlineData</title>
     <style>
         * { margin: 0; padding: 0; box-sizing: border-box; }
         body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; color: #333; line-height: 1.6; }
@@ -13,166 +13,95 @@
         nav a:hover { color: #fff; text-decoration: underline; }
         nav .nav-brand { font-weight: bold; font-size: 1.1rem; }
         main { padding: 1.5rem 0; }
-        .day-tabs { display: flex; gap: 0; margin: 1rem 0 0; border-bottom: 2px solid #3498db; }
-        .day-tab { padding: 0.5rem 1.2rem; cursor: pointer; background: #f5f5f5; border: 1px solid #ddd; border-bottom: none; border-radius: 4px 4px 0 0; margin-right: 2px; font-weight: 600; color: #555; }
-        .day-tab:hover { background: #e8e8e8; }
-        .day-tab.active { background: #3498db; color: #fff; border-color: #3498db; }
-        .filters { display: flex; gap: 1rem; padding: 0.8rem 0; align-items: center; }
-        .filters label { font-weight: 600; font-size: 0.9rem; }
-        .filters select { padding: 0.3rem 0.5rem; border: 1px solid #ccc; border-radius: 4px; font-size: 0.9rem; }
-        .day-section { display: none; }
-        .day-section.active { display: block; }
-        table { width: 100%; border-collapse: collapse; margin: 0.5rem 0 1.5rem; }
+        table { width: 100%; border-collapse: collapse; margin: 1rem 0; }
         th, td { padding: 0.5rem 0.8rem; border: 1px solid #ddd; text-align: left; }
         th { background: #f5f5f5; font-weight: 600; }
         tr:hover { background: #fafafa; }
-        tr.hidden { display: none; }
         a { color: #3498db; }
         .btn { display: inline-block; padding: 0.4rem 1rem; border: none; border-radius: 4px; cursor: pointer; text-decoration: none; font-size: 0.9rem; }
         .btn-primary { background: #3498db; color: #fff; }
         .btn-primary:hover { background: #2980b9; }
         .btn-secondary { background: #95a5a6; color: #fff; }
         .btn-secondary:hover { background: #7f8c8d; }
-        .actions { margin: 1rem 0; }
-        .actions > * { margin-right: 0.5rem; }
+        .actions { margin: 1rem 0; display: flex; gap: 0.5rem; align-items: center; flex-wrap: wrap; }
         .empty { text-align: center; color: #999; padding: 2rem; }
+        .msg-success { padding: 0.6rem 1rem; background: #d4edda; color: #155724; border: 1px solid #c3e6cb; border-radius: 4px; margin-bottom: 1rem; }
+        .msg-error { padding: 0.6rem 1rem; background: #f8d7da; color: #721c24; border: 1px solid #f5c6cb; border-radius: 4px; margin-bottom: 1rem; }
     </style>
 </head>
 <body>
     <div th:replace="~{fragments/header :: header}"></div>
     <main class="container">
         <h1 th:text="${(competition.edition != null ? '제' + competition.edition + '회 ' : '') + competition.shortName} + ' - 종목 관리'">종목 관리</h1>
+
+        <div th:if="${message}" class="msg-success" th:text="${message}"></div>
+        <div th:if="${errorMessage}" class="msg-error" th:text="${errorMessage}"></div>
+
         <div class="actions">
             <a th:href="@{/admin/competitions/{compId}/events/new(compId=${competition.id})}" class="btn btn-primary">종목 등록</a>
+            <form th:action="@{/admin/competitions/{compId}/events/import(compId=${competition.id})}" method="post" enctype="multipart/form-data"
+                  style="display:flex; gap:0.5rem; align-items:center;">
+                <input type="file" name="file" accept=".pdf" required style="font-size:0.85rem;">
+                <button type="submit" class="btn btn-primary">조편성 PDF 가져오기</button>
+            </form>
             <a th:href="@{/admin/competitions/{id}(id=${competition.id})}" class="btn btn-secondary">대회로 돌아가기</a>
         </div>
 
-        <div th:if="${eventsByDay.isEmpty()}" class="empty">등록된 종목이 없습니다.</div>
+        <div th:if="${events.isEmpty()}" class="empty">등록된 종목이 없습니다.</div>
 
-        <div th:if="${!eventsByDay.isEmpty()}">
-            <div class="day-tabs">
-                <div th:each="entry : ${eventsByDay}" class="day-tab"
-                     th:attr="data-day=${entry.key}"
-                     th:text="${entry.key == 0 ? '미지정' : entry.key + '일차'}">일차</div>
+        <div th:if="${!events.isEmpty()}">
+            <div style="display:flex; gap:0.5rem; align-items:center; margin:1rem 0;">
+                <label style="font-weight:600; font-size:0.9rem;">부별</label>
+                <select id="filterDivision" style="padding:0.3rem 0.5rem; border:1px solid #ccc; border-radius:4px; font-size:0.9rem;">
+                    <option value="">전체</option>
+                </select>
+                <label style="font-weight:600; font-size:0.9rem; margin-left:0.5rem;">종목</label>
+                <select id="filterEventName" style="padding:0.3rem 0.5rem; border:1px solid #ccc; border-radius:4px; font-size:0.9rem;">
+                    <option value="">전체</option>
+                </select>
             </div>
-
-            <div class="filters">
-                <label for="filterDivision">부별</label>
-                <select id="filterDivision"><option value="">전체</option></select>
-                <label for="filterEventName">종목</label>
-                <select id="filterEventName"><option value="">전체</option></select>
-            </div>
-
-            <div th:each="entry : ${eventsByDay}" class="day-section" th:attr="data-day=${entry.key}">
-                <table>
-                    <thead>
-                        <tr>
-                            <th style="width:60px">번호</th>
-                            <th>부별</th>
-                            <th>종목</th>
-                            <th>라운드</th>
-                        </tr>
-                    </thead>
-                    <tbody>
-                        <tr th:each="e : ${entry.value}"
-                            th:attr="data-division=${e.divisionName},data-event-name=${e.eventName}">
-                            <td th:text="${e.eventNumber}"></td>
-                            <td>
-                                <a th:href="@{/admin/competitions/{compId}/events/{id}(compId=${competition.id}, id=${e.id})}"
-                                   th:text="${e.divisionName}"></a>
-                            </td>
-                            <td>
-                                <a th:href="@{/admin/competitions/{compId}/events/{id}(compId=${competition.id}, id=${e.id})}"
-                                   th:text="${e.eventName}"></a>
-                            </td>
-                            <td th:text="${e.round}"></td>
-                        </tr>
-                    </tbody>
-                </table>
-            </div>
+            <table>
+                <thead>
+                    <tr>
+                        <th>부별</th>
+                        <th>종목</th>
+                        <th>성별</th>
+                    </tr>
+                </thead>
+                <tbody id="eventBody">
+                    <tr th:each="e : ${events}" th:attr="data-division=${e.divisionName},data-event-name=${e.eventName}">
+                        <td th:text="${e.divisionName}"></td>
+                        <td><a th:href="@{/admin/competitions/{compId}/events/{eventId}(compId=${competition.id}, eventId=${e.id})}"
+                               th:text="${e.eventName}"></a></td>
+                        <td th:text="${e.gender == 'M' ? '남' : (e.gender == 'F' ? '여' : '혼성')}"></td>
+                    </tr>
+                </tbody>
+            </table>
         </div>
     </main>
 
-    <script th:inline="javascript">
-        const COMP_ID = [[${competition.id}]];
-        const DAY_KEY = 'admin-event-day-' + COMP_ID;
-        const DIV_KEY = 'admin-event-div-' + COMP_ID;
-        const EVT_KEY = 'admin-event-evt-' + COMP_ID;
-
-        const tabs = document.querySelectorAll('.day-tab');
-        const sections = document.querySelectorAll('.day-section');
+    <script>
+        const rows = document.querySelectorAll('#eventBody tr');
         const filterDiv = document.getElementById('filterDivision');
         const filterEvt = document.getElementById('filterEventName');
 
-        function getActiveSection() {
-            return document.querySelector('.day-section.active');
-        }
-
-        function populateFilterOptions() {
-            const section = getActiveSection();
-            if (!section) return;
-
-            const rows = section.querySelectorAll('tbody tr');
-            const divisions = new Set();
-            const eventNames = new Set();
-            rows.forEach(r => {
-                if (r.dataset.division) divisions.add(r.dataset.division);
-                if (r.dataset.eventName) eventNames.add(r.dataset.eventName);
-            });
-
-            const savedDiv = sessionStorage.getItem(DIV_KEY) || '';
-            const savedEvt = sessionStorage.getItem(EVT_KEY) || '';
-
-            filterDiv.innerHTML = '<option value="">전체</option>';
-            [...divisions].sort().forEach(d => {
-                const opt = document.createElement('option');
-                opt.value = d; opt.textContent = d;
-                if (d === savedDiv) opt.selected = true;
-                filterDiv.appendChild(opt);
-            });
-
-            filterEvt.innerHTML = '<option value="">전체</option>';
-            [...eventNames].sort().forEach(e => {
-                const opt = document.createElement('option');
-                opt.value = e; opt.textContent = e;
-                if (e === savedEvt) opt.selected = true;
-                filterEvt.appendChild(opt);
-            });
-        }
+        // 옵션 채우기
+        const divisions = new Set();
+        const eventNames = new Set();
+        rows.forEach(r => { divisions.add(r.dataset.division); eventNames.add(r.dataset.eventName); });
+        [...divisions].sort().forEach(d => { const o = document.createElement('option'); o.value = d; o.textContent = d; filterDiv.appendChild(o); });
+        [...eventNames].sort().forEach(e => { const o = document.createElement('option'); o.value = e; o.textContent = e; filterEvt.appendChild(o); });
 
         function applyFilter() {
-            const div = filterDiv.value;
-            const evt = filterEvt.value;
-            sessionStorage.setItem(DIV_KEY, div);
-            sessionStorage.setItem(EVT_KEY, evt);
-
-            const section = getActiveSection();
-            if (!section) return;
-            section.querySelectorAll('tbody tr').forEach(row => {
-                const matchDiv = !div || row.dataset.division === div;
-                const matchEvt = !evt || row.dataset.eventName === evt;
-                row.classList.toggle('hidden', !(matchDiv && matchEvt));
+            const d = filterDiv.value, e = filterEvt.value;
+            rows.forEach(r => {
+                const matchD = !d || r.dataset.division === d;
+                const matchE = !e || r.dataset.eventName === e;
+                r.style.display = (matchD && matchE) ? '' : 'none';
             });
         }
-
-        function selectDay(day) {
-            tabs.forEach(t => t.classList.toggle('active', t.dataset.day === day));
-            sections.forEach(s => s.classList.toggle('active', s.dataset.day === day));
-            sessionStorage.setItem(DAY_KEY, day);
-            populateFilterOptions();
-            applyFilter();
-        }
-
         filterDiv.addEventListener('change', applyFilter);
         filterEvt.addEventListener('change', applyFilter);
-        tabs.forEach(tab => tab.addEventListener('click', () => selectDay(tab.dataset.day)));
-
-        const savedDay = sessionStorage.getItem(DAY_KEY);
-        if (savedDay && document.querySelector('.day-tab[data-day="' + savedDay + '"]')) {
-            selectDay(savedDay);
-        } else if (tabs.length > 0) {
-            selectDay(tabs[0].dataset.day);
-        }
     </script>
 </body>
 </html>

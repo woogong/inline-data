@@ -5,10 +5,12 @@ import kr.pe.batang.inlinedata.entity.Competition;
 import kr.pe.batang.inlinedata.entity.Event;
 import kr.pe.batang.inlinedata.entity.EventHeat;
 import kr.pe.batang.inlinedata.entity.EventResult;
+import kr.pe.batang.inlinedata.entity.EventRound;
 import kr.pe.batang.inlinedata.entity.HeatEntry;
 import kr.pe.batang.inlinedata.repository.EventHeatRepository;
 import kr.pe.batang.inlinedata.repository.EventRepository;
 import kr.pe.batang.inlinedata.repository.EventResultRepository;
+import kr.pe.batang.inlinedata.repository.EventRoundRepository;
 import kr.pe.batang.inlinedata.repository.HeatEntryRepository;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
@@ -26,13 +28,16 @@ import java.util.stream.Collectors;
 public class EventService {
 
     private final EventRepository eventRepository;
+    private final EventRoundRepository eventRoundRepository;
     private final EventHeatRepository eventHeatRepository;
     private final HeatEntryRepository heatEntryRepository;
     private final EventResultRepository eventResultRepository;
     private final CompetitionService competitionService;
 
+    // --- Event (종목) ---
+
     public List<Event> findByCompetitionId(Long competitionId) {
-        return eventRepository.findByCompetitionIdOrderByEventNumberAsc(competitionId);
+        return eventRepository.findByCompetitionIdOrderByFirstEventNumber(competitionId);
     }
 
     public Event findById(Long id) {
@@ -40,19 +45,41 @@ public class EventService {
                 .orElseThrow(() -> new IllegalArgumentException("종목을 찾을 수 없습니다. id=" + id));
     }
 
-    public List<EventHeat> findHeatsByEventId(Long eventId) {
-        return eventHeatRepository.findByEventIdOrderByHeatNumberAsc(eventId);
+    @Transactional
+    public Event create(Long competitionId, EventFormDto dto) {
+        Competition competition = competitionService.findById(competitionId);
+        return eventRepository.save(dto.toEntity(competition));
     }
 
-    public List<HeatEntry> findEntriesByHeatId(Long heatId) {
-        return heatEntryRepository.findByHeatIdOrderByBibNumberAsc(heatId);
+    @Transactional
+    public Event update(Long id, EventFormDto dto) {
+        Event event = findById(id);
+        event.update(dto.getDivisionName(), dto.getGender(), dto.getEventName(), dto.isTeamEvent());
+        return event;
     }
 
-    public Map<EventHeat, List<HeatEntry>> findHeatsWithEntries(Long eventId) {
-        List<EventHeat> heats = eventHeatRepository.findByEventIdOrderByHeatNumberAsc(eventId);
-        if (heats.isEmpty()) {
-            return Map.of();
-        }
+    @Transactional
+    public void delete(Long id) {
+        Event event = findById(id);
+        eventRepository.delete(event);
+    }
+
+    // --- EventRound (경기/라운드) ---
+
+    public List<EventRound> findRoundsByEventId(Long eventId) {
+        return eventRoundRepository.findByEventIdOrderByEventNumberAsc(eventId);
+    }
+
+    public EventRound findRoundById(Long id) {
+        return eventRoundRepository.findById(id)
+                .orElseThrow(() -> new IllegalArgumentException("경기를 찾을 수 없습니다. id=" + id));
+    }
+
+    // --- EventHeat + HeatEntry (조/출전) ---
+
+    public Map<EventHeat, List<HeatEntry>> findHeatsWithEntries(Long eventRoundId) {
+        List<EventHeat> heats = eventHeatRepository.findByEventRoundIdOrderByHeatNumberAsc(eventRoundId);
+        if (heats.isEmpty()) return Map.of();
         List<Long> heatIds = heats.stream().map(EventHeat::getId).toList();
         List<HeatEntry> entries = heatEntryRepository.findByHeatIdsWithDetails(heatIds);
         Map<Long, List<HeatEntry>> entriesByHeatId = entries.stream()
@@ -64,11 +91,18 @@ public class EventService {
         return result;
     }
 
-    public Map<EventHeat, List<EventResult>> findHeatsWithResults(Long eventId) {
-        List<EventHeat> heats = eventHeatRepository.findByEventIdOrderByHeatNumberAsc(eventId);
-        if (heats.isEmpty()) {
-            return Map.of();
-        }
+    public Map<Long, EventResult> findResultsByEntryId(Long eventRoundId) {
+        List<EventHeat> heats = eventHeatRepository.findByEventRoundIdOrderByHeatNumberAsc(eventRoundId);
+        if (heats.isEmpty()) return Map.of();
+        List<Long> heatIds = heats.stream().map(EventHeat::getId).toList();
+        List<EventResult> results = eventResultRepository.findByHeatIdsWithDetails(heatIds);
+        return results.stream()
+                .collect(Collectors.toMap(er -> er.getHeatEntry().getId(), er -> er));
+    }
+
+    public Map<EventHeat, List<EventResult>> findHeatsWithResults(Long eventRoundId) {
+        List<EventHeat> heats = eventHeatRepository.findByEventRoundIdOrderByHeatNumberAsc(eventRoundId);
+        if (heats.isEmpty()) return Map.of();
         List<Long> heatIds = heats.stream().map(EventHeat::getId).toList();
         List<EventResult> results = eventResultRepository.findByHeatIdsWithDetails(heatIds);
         Map<Long, List<EventResult>> resultsByHeatId = results.stream()
@@ -80,17 +114,8 @@ public class EventService {
         return result;
     }
 
-    public Map<Long, EventResult> findResultsByEntryId(Long eventId) {
-        List<EventHeat> heats = eventHeatRepository.findByEventIdOrderByHeatNumberAsc(eventId);
-        if (heats.isEmpty()) return Map.of();
-        List<Long> heatIds = heats.stream().map(EventHeat::getId).toList();
-        List<EventResult> results = eventResultRepository.findByHeatIdsWithDetails(heatIds);
-        return results.stream()
-                .collect(Collectors.toMap(er -> er.getHeatEntry().getId(), er -> er));
-    }
-
-    public boolean hasResults(Long eventId) {
-        List<EventHeat> heats = eventHeatRepository.findByEventIdOrderByHeatNumberAsc(eventId);
+    public boolean hasResults(Long eventRoundId) {
+        List<EventHeat> heats = eventHeatRepository.findByEventRoundIdOrderByHeatNumberAsc(eventRoundId);
         if (heats.isEmpty()) return false;
         List<Long> heatIds = heats.stream().map(EventHeat::getId).toList();
         return !eventResultRepository.findByHeatIdsWithDetails(heatIds).isEmpty();
@@ -114,31 +139,5 @@ public class EventService {
                     .note(note)
                     .build());
         }
-    }
-
-    @Transactional
-    public Event create(Long competitionId, EventFormDto dto) {
-        Competition competition = competitionService.findById(competitionId);
-        return eventRepository.save(dto.toEntity(competition));
-    }
-
-    @Transactional
-    public Event update(Long id, EventFormDto dto) {
-        Event event = findById(id);
-        event.update(
-                dto.getEventNumber(),
-                dto.getDivisionName(),
-                dto.getGender(),
-                dto.getEventName(),
-                dto.getRound(),
-                dto.getDayNumber()
-        );
-        return event;
-    }
-
-    @Transactional
-    public void delete(Long id) {
-        Event event = findById(id);
-        eventRepository.delete(event);
     }
 }

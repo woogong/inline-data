@@ -10,6 +10,7 @@ import jakarta.persistence.Id;
 import jakarta.persistence.JoinColumn;
 import jakarta.persistence.ManyToOne;
 import jakarta.persistence.Table;
+import jakarta.persistence.UniqueConstraint;
 import lombok.AccessLevel;
 import lombok.Builder;
 import lombok.Getter;
@@ -21,31 +22,27 @@ import org.springframework.data.jpa.domain.support.AuditingEntityListener;
 import java.time.LocalDateTime;
 
 @Entity
-@Table(name = "event")
+@Table(name = "event_round",
+        uniqueConstraints = @UniqueConstraint(columnNames = {"event_id", "round"}))
 @Getter
 @NoArgsConstructor(access = AccessLevel.PROTECTED)
 @EntityListeners(AuditingEntityListener.class)
-public class Event {
+public class EventRound {
 
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
 
     @ManyToOne(fetch = FetchType.LAZY)
-    @JoinColumn(name = "competition_id", nullable = false)
-    private Competition competition;
+    @JoinColumn(name = "event_id", nullable = false)
+    private Event event;
 
-    @Column(nullable = false, length = 50)
-    private String divisionName;
+    @Column(nullable = false, length = 20)
+    private String round;
 
-    @Column(nullable = false, length = 1)
-    private String gender;
+    private Integer eventNumber;
 
-    @Column(nullable = false, length = 30)
-    private String eventName;
-
-    @Column(nullable = false)
-    private boolean teamEvent;
+    private Integer dayNumber;
 
     @CreatedDate
     @Column(updatable = false)
@@ -55,19 +52,16 @@ public class Event {
     private LocalDateTime updatedAt;
 
     @Builder
-    public Event(Competition competition, String divisionName, String gender,
-                 String eventName, boolean teamEvent) {
-        this.competition = competition;
-        this.divisionName = divisionName;
-        this.gender = gender;
-        this.eventName = eventName;
-        this.teamEvent = teamEvent;
+    public EventRound(Event event, String round, Integer eventNumber, Integer dayNumber) {
+        this.event = event;
+        this.round = round;
+        this.eventNumber = eventNumber;
+        this.dayNumber = dayNumber;
     }
 
-    public void update(String divisionName, String gender, String eventName, boolean teamEvent) {
-        this.divisionName = divisionName;
-        this.gender = gender;
-        this.eventName = eventName;
-        this.teamEvent = teamEvent;
+    public void update(String round, Integer eventNumber, Integer dayNumber) {
+        this.round = round;
+        this.eventNumber = eventNumber;
+        this.dayNumber = dayNumber;
     }
 }
