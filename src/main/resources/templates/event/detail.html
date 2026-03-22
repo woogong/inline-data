@@ -20,6 +20,16 @@
         th, td { padding: 0.4rem 0.8rem; border: 1px solid #ddd; text-align: left; }
         th { background: #f5f5f5; font-weight: 600; }
         tr:hover { background: #fafafa; }
+        .rank-1 { background: #fff9e6; }
+        .rank-2 { background: #f5f5f5; }
+        .rank-3 { background: #fef0e7; }
+        .q-mark { color: #27ae60; font-weight: 700; }
+        .new-record { font-weight: 600; font-size: 0.85rem; padding: 0.1rem 0.4rem; border-radius: 3px; }
+        .new-record.nr-competition { color: #e74c3c; }
+        .new-record.nr-division { color: #e67e22; }
+        .new-record.nr-korea { color: #2980b9; }
+        .new-record.nr-world { color: #8e44ad; }
+        .note { color: #999; font-size: 0.85rem; }
         .btn { display: inline-block; padding: 0.4rem 1rem; border: none; border-radius: 4px; cursor: pointer; text-decoration: none; font-size: 0.9rem; }
         .btn-secondary { background: #95a5a6; color: #fff; }
         .btn-secondary:hover { background: #7f8c8d; }
@@ -37,34 +47,83 @@
             <div th:if="${event.dayNumber != null}">일차: <span th:text="${event.dayNumber} + '일차'"></span></div>
         </div>
 
-        <div th:if="${heatsWithEntries.isEmpty()}" class="empty">출전 엔트리가 없습니다.</div>
+        <!-- 결과가 있는 경우 -->
+        <div th:if="${hasResults}">
+            <div th:each="heatEntry : ${heatsWithResults}">
+                <h2 th:text="${heatEntry.key.heatNumber == 0 ? '결승' : heatEntry.key.heatNumber + '조'}">조</h2>
+                <table>
+                    <thead>
+                        <tr>
+                            <th style="width:50px">순위</th>
+                            <th style="width:60px">배번</th>
+                            <th>선수명</th>
+                            <th>소속</th>
+                            <th>기록</th>
+                            <th style="width:60px">진출</th>
+                            <th>비고</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <tr th:each="er : ${heatEntry.value}"
+                            th:classappend="${er.ranking == 1 ? 'rank-1' : (er.ranking == 2 ? 'rank-2' : (er.ranking == 3 ? 'rank-3' : ''))}">
+                            <td th:text="${er.ranking}"></td>
+                            <td th:text="${er.heatEntry.bibNumber}"></td>
+                            <td th:text="${er.heatEntry.entry.athlete.name}"></td>
+                            <td>
+                                <span th:if="${er.heatEntry.entry.team != null}"
+                                      th:text="${er.heatEntry.entry.team.region} + ' ' + ${er.heatEntry.entry.team.name}"></span>
+                            </td>
+                            <td>
+                                <span th:text="${er.record}"></span>
+                                <span th:if="${er.newRecord != null}" class="new-record"
+                                      th:classappend="${er.newRecord == '대회신' ? 'nr-competition' : (er.newRecord == '부별신' ? 'nr-division' : (er.newRecord == '한국신' ? 'nr-korea' : (er.newRecord == '세계신' ? 'nr-world' : '')))}"
+                                      th:text="' ' + ${er.newRecord}"></span>
+                            </td>
+                            <td>
+                                <span th:if="${er.qualification != null}" class="q-mark" th:text="${er.qualification}"></span>
+                            </td>
+                            <td>
+                                <span th:if="${er.note != null}" class="note" th:text="${er.note}"></span>
+                            </td>
+                        </tr>
+                        <tr th:if="${heatEntry.value.isEmpty()}">
+                            <td colspan="7" style="text-align:center; color:#999;">결과가 없습니다.</td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
+        </div>
 
-        <div th:each="heatEntry : ${heatsWithEntries}">
-            <h2 th:text="${heatEntry.key.heatNumber == 0 ? '결승' : heatEntry.key.heatNumber + '조'}">조</h2>
-            <table>
-                <thead>
-                    <tr>
-                        <th style="width:60px">배번</th>
-                        <th>선수명</th>
-                        <th>소속</th>
-                        <th>학년</th>
-                    </tr>
-                </thead>
-                <tbody>
-                    <tr th:each="he : ${heatEntry.value}">
-                        <td th:text="${he.bibNumber}"></td>
-                        <td th:text="${he.entry.athlete.name}"></td>
-                        <td>
-                            <span th:if="${he.entry.team != null}"
-                                  th:text="${he.entry.team.region} + ' ' + ${he.entry.team.name}"></span>
-                        </td>
-                        <td th:text="${he.entry.grade}"></td>
-                    </tr>
-                    <tr th:if="${heatEntry.value.isEmpty()}">
-                        <td colspan="4" style="text-align:center; color:#999;">배정된 선수가 없습니다.</td>
-                    </tr>
-                </tbody>
-            </table>
+        <!-- 결과가 없는 경우: 출전 목록 -->
+        <div th:if="${!hasResults}">
+            <div th:if="${heatsWithEntries.isEmpty()}" class="empty">출전 엔트리가 없습니다.</div>
+            <div th:each="heatEntry : ${heatsWithEntries}">
+                <h2 th:text="${heatEntry.key.heatNumber == 0 ? '결승' : heatEntry.key.heatNumber + '조'}">조</h2>
+                <table>
+                    <thead>
+                        <tr>
+                            <th style="width:60px">배번</th>
+                            <th>선수명</th>
+                            <th>소속</th>
+                            <th>학년</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <tr th:each="he : ${heatEntry.value}">
+                            <td th:text="${he.bibNumber}"></td>
+                            <td th:text="${he.entry.athlete.name}"></td>
+                            <td>
+                                <span th:if="${he.entry.team != null}"
+                                      th:text="${he.entry.team.region} + ' ' + ${he.entry.team.name}"></span>
+                            </td>
+                            <td th:text="${he.entry.grade}"></td>
+                        </tr>
+                        <tr th:if="${heatEntry.value.isEmpty()}">
+                            <td colspan="4" style="text-align:center; color:#999;">배정된 선수가 없습니다.</td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
         </div>
 
         <div class="actions">
