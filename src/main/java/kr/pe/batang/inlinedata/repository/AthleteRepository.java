@@ -15,6 +15,8 @@ public interface AthleteRepository extends JpaRepository<Athlete, Long> {
 
     List<Athlete> findByNameAndGender(String name, String gender);
 
+    boolean existsByNameAndGenderAndNotes(String name, String gender, String notes);
+
     @Query("SELECT a FROM Athlete a WHERE " +
            "(:name IS NULL OR a.name LIKE %:name%) AND " +
            "(:birthYear IS NULL OR a.birthYear = :birthYear) AND " +
