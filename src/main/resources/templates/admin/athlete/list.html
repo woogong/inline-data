@@ -31,12 +31,21 @@
         <div class="actions">
             <a th:href="@{/admin/athletes/new}" class="btn btn-primary">선수 등록</a>
         </div>
+        <form th:action="@{/admin/athletes}" method="get" style="display:flex; gap:0.5rem; align-items:center; margin:1rem 0; flex-wrap:wrap;">
+            <input type="text" name="name" th:value="${filterName}" placeholder="이름" style="padding:0.4rem; border:1px solid #ccc; border-radius:4px; width:120px;">
+            <input type="number" name="birthYear" th:value="${filterBirthYear}" placeholder="생년" style="padding:0.4rem; border:1px solid #ccc; border-radius:4px; width:80px;">
+            <input type="text" name="notes" th:value="${filterNotes}" placeholder="비고" style="padding:0.4rem; border:1px solid #ccc; border-radius:4px; width:150px;">
+            <button type="submit" class="btn btn-primary" style="padding:0.4rem 0.8rem;">검색</button>
+            <a th:href="@{/admin/athletes}" class="btn btn-secondary" style="padding:0.4rem 0.8rem;">초기화</a>
+        </form>
         <table>
             <thead>
                 <tr>
                     <th>ID</th>
                     <th>이름</th>
                     <th>성별</th>
+                    <th>생년</th>
+                    <th>비고</th>
                 </tr>
             </thead>
             <tbody>
@@ -44,9 +53,11 @@
                     <td th:text="${a.id}"></td>
                     <td><a th:href="@{/admin/athletes/{id}(id=${a.id})}" th:text="${a.name}"></a></td>
                     <td th:text="${a.gender == 'M' ? '남' : (a.gender == 'F' ? '여' : '혼성')}"></td>
+                    <td th:text="${a.birthYear}"></td>
+                    <td th:text="${a.notes}"></td>
                 </tr>
                 <tr th:if="${#lists.isEmpty(athletes)}">
-                    <td colspan="3" style="text-align:center; color:#999;">등록된 선수가 없습니다.</td>
+                    <td colspan="5" style="text-align:center; color:#999;">등록된 선수가 없습니다.</td>
                 </tr>
             </tbody>
         </table>

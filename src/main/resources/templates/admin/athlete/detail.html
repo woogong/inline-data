@@ -32,9 +32,24 @@
     <div th:replace="~{fragments/header :: header}"></div>
     <main class="container">
         <h1 th:text="${athlete.name}">선수명</h1>
+        <div th:if="${errorMessage}" style="padding:0.6rem 1rem; background:#fdecea; border:1px solid #e74c3c; border-radius:4px; color:#c0392b; margin-bottom:1rem; display:flex; align-items:center; gap:1rem;">
+            <span th:text="${errorMessage}"></span>
+            <form th:action="@{/admin/athletes/{id}/delete-force(id=${athlete.id})}" method="post" style="display:inline;"
+                  onsubmit="return confirm('참가 이력을 포함하여 선수를 완전히 삭제합니다. 계속하시겠습니까?');">
+                <button type="submit" class="btn btn-danger" style="white-space:nowrap;">참가 이력 포함 삭제</button>
+            </form>
+        </div>
         <dl>
             <dt>성별</dt>
             <dd th:text="${athlete.gender == 'M' ? '남' : (athlete.gender == 'F' ? '여' : '혼성')}"></dd>
+            <th:block th:if="${athlete.birthYear != null}">
+                <dt>생년</dt>
+                <dd th:text="${athlete.birthYear}"></dd>
+            </th:block>
+            <th:block th:if="${athlete.notes != null and !athlete.notes.isEmpty()}">
+                <dt>비고</dt>
+                <dd th:text="${athlete.notes}"></dd>
+            </th:block>
             <dt>등록일시</dt>
             <dd th:text="${#temporals.format(athlete.createdAt, 'yyyy-MM-dd HH:mm')}"></dd>
             <dt>수정일시</dt>

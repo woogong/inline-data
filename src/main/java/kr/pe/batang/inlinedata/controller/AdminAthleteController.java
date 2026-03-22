@@ -13,6 +13,8 @@ import org.springframework.web.bind.annotation.ModelAttribute;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RequestParam;
+import org.springframework.web.servlet.mvc.support.RedirectAttributes;
 
 @Controller
 @RequestMapping("/admin/athletes")
@@ -22,8 +24,21 @@ public class AdminAthleteController {
     private final AthleteService athleteService;
 
     @GetMapping
-    public String list(Model model) {
-        model.addAttribute("athletes", athleteService.findAll());
+    public String list(@RequestParam(required = false) String name,
+                       @RequestParam(required = false) Integer birthYear,
+                       @RequestParam(required = false) String notes,
+                       Model model) {
+        boolean hasFilter = (name != null && !name.isBlank())
+                || birthYear != null
+                || (notes != null && !notes.isBlank());
+        if (hasFilter) {
+            model.addAttribute("athletes", athleteService.search(name, birthYear, notes));
+        } else {
+            model.addAttribute("athletes", athleteService.findAll());
+        }
+        model.addAttribute("filterName", name);
+        model.addAttribute("filterBirthYear", birthYear);
+        model.addAttribute("filterNotes", notes);
         return "admin/athlete/list";
     }
 
@@ -65,8 +80,19 @@ public class AdminAthleteController {
     }
 
     @PostMapping("/{id}/delete")
-    public String delete(@PathVariable Long id) {
-        athleteService.delete(id);
+    public String delete(@PathVariable Long id, RedirectAttributes redirectAttributes) {
+        try {
+            athleteService.delete(id);
+        } catch (IllegalStateException e) {
+            redirectAttributes.addFlashAttribute("errorMessage", e.getMessage());
+            return "redirect:/admin/athletes/" + id;
+        }
+        return "redirect:/admin/athletes";
+    }
+
+    @PostMapping("/{id}/delete-force")
+    public String deleteForce(@PathVariable Long id) {
+        athleteService.deleteForce(id);
         return "redirect:/admin/athletes";
     }
 }

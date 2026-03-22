@@ -4,6 +4,7 @@ import kr.pe.batang.inlinedata.controller.dto.EventFormDto;
 import kr.pe.batang.inlinedata.entity.Competition;
 import kr.pe.batang.inlinedata.entity.Event;
 import kr.pe.batang.inlinedata.service.CompetitionService;
+import kr.pe.batang.inlinedata.service.EntryService;
 import kr.pe.batang.inlinedata.service.EventService;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -33,6 +34,9 @@ class AdminEventControllerTest {
 
     @MockitoBean
     private CompetitionService competitionService;
+
+    @MockitoBean
+    private EntryService entryService;
 
     private Competition createCompetition() {
         return Competition.builder().name("테스트 대회").shortName("테스트").build();

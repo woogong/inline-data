@@ -4,6 +4,7 @@ import kr.pe.batang.inlinedata.controller.dto.EventFormDto;
 import jakarta.validation.Valid;
 import kr.pe.batang.inlinedata.entity.Event;
 import kr.pe.batang.inlinedata.service.CompetitionService;
+import kr.pe.batang.inlinedata.service.EntryService;
 import kr.pe.batang.inlinedata.service.EventService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Controller;
@@ -30,6 +31,7 @@ public class AdminEventController {
 
     private final EventService eventService;
     private final CompetitionService competitionService;
+    private final EntryService entryService;
 
     @GetMapping
     public String list(@PathVariable Long compId, Model model) {
@@ -71,6 +73,57 @@ public class AdminEventController {
 
     private String blankToNull(String s) {
         return s == null || s.isBlank() ? null : s.trim();
+    }
+
+    @GetMapping("/{id}/entries")
+    public String entries(@PathVariable Long compId, @PathVariable Long id, Model model) {
+        Event event = eventService.findById(id);
+        model.addAttribute("competition", competitionService.findById(compId));
+        model.addAttribute("event", event);
+        model.addAttribute("heatsWithEntries", eventService.findHeatsWithEntries(id));
+        return "admin/event/entries";
+    }
+
+    @PostMapping("/{id}/heats/add")
+    @ResponseBody
+    public Map<String, Object> addHeat(@PathVariable Long compId, @PathVariable Long id,
+                                       @RequestBody Map<String, String> body) {
+        Event event = eventService.findById(id);
+        int heatNumber = Integer.parseInt(body.get("heatNumber"));
+        Long heatId = entryService.addHeat(event, heatNumber);
+        return Map.of("status", "ok", "heatId", heatId);
+    }
+
+    @PostMapping("/{id}/heats/delete")
+    @ResponseBody
+    public Map<String, Object> deleteHeat(@PathVariable Long compId, @PathVariable Long id,
+                                          @RequestBody Map<String, String> body) {
+        Long heatId = Long.parseLong(body.get("heatId"));
+        entryService.deleteHeat(heatId);
+        return Map.of("status", "ok");
+    }
+
+    @PostMapping("/{id}/entries/save")
+    @ResponseBody
+    public Map<String, Object> saveEntry(@PathVariable Long compId, @PathVariable Long id,
+                                         @RequestBody Map<String, String> body) {
+        Event event = eventService.findById(id);
+        Long heatId = Long.parseLong(body.get("heatId"));
+        int bibNumber = Integer.parseInt(body.get("bibNumber"));
+        String name = body.get("name");
+        String region = body.getOrDefault("region", "");
+        String teamName = body.getOrDefault("teamName", "");
+        entryService.saveEntry(event, heatId, bibNumber, name, event.getGender(), region, teamName);
+        return Map.of("status", "ok");
+    }
+
+    @PostMapping("/{id}/entries/delete")
+    @ResponseBody
+    public Map<String, Object> deleteEntry(@PathVariable Long compId, @PathVariable Long id,
+                                           @RequestBody Map<String, String> body) {
+        Long heatEntryId = Long.parseLong(body.get("heatEntryId"));
+        entryService.deleteEntry(heatEntryId);
+        return Map.of("status", "ok");
     }
 
     @GetMapping("/new")

@@ -50,6 +50,17 @@
                 <div class="error" th:if="${#fields.hasErrors('gender')}" th:errors="*{gender}"></div>
             </div>
 
+            <div class="form-group">
+                <label for="birthYear">생년</label>
+                <input type="number" id="birthYear" th:field="*{birthYear}" min="1900" max="2030" placeholder="예: 2012" style="width:120px;">
+            </div>
+
+            <div class="form-group">
+                <label for="notes">비고</label>
+                <input type="text" id="notes" th:field="*{notes}" maxlength="200" placeholder="동명이인 구별 등">
+                <div class="error" th:if="${#fields.hasErrors('notes')}" th:errors="*{notes}"></div>
+            </div>
+
             <div class="actions">
                 <button type="submit" class="btn btn-primary" th:text="${dto.id != null} ? '수정' : '등록'">저장</button>
                 <a th:href="${dto.id != null} ? @{/admin/athletes/{id}(id=${dto.id})} : @{/admin/athletes}"
