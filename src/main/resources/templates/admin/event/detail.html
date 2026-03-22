@@ -103,6 +103,8 @@
         </div>
 
         <div class="actions">
+            <button type="button" class="btn btn-success"
+                    th:onclick="'location.href=\'' + @{/admin/competitions/{compId}/events/{id}/entries(compId=${competition.id}, id=${event.id})} + '\''">엔트리 등록</button>
             <a th:href="@{/admin/competitions/{compId}/events/{id}/edit(compId=${competition.id}, id=${event.id})}" class="btn btn-primary">종목 수정</a>
             <form th:action="@{/admin/competitions/{compId}/events/{id}/delete(compId=${competition.id}, id=${event.id})}" method="post" class="delete-form"
                   onsubmit="return confirm('정말 삭제하시겠습니까?');">

@@ -34,6 +34,11 @@ public class Athlete {
     @Column(nullable = false, length = 1)
     private String gender;
 
+    private Integer birthYear;
+
+    @Column(length = 200)
+    private String notes;
+
     @CreatedDate
     @Column(updatable = false)
     private LocalDateTime createdAt;
@@ -42,13 +47,17 @@ public class Athlete {
     private LocalDateTime updatedAt;
 
     @Builder
-    public Athlete(String name, String gender) {
+    public Athlete(String name, String gender, Integer birthYear, String notes) {
         this.name = name;
         this.gender = gender;
+        this.birthYear = birthYear;
+        this.notes = notes;
     }
 
-    public void update(String name, String gender) {
+    public void update(String name, String gender, Integer birthYear, String notes) {
         this.name = name;
         this.gender = gender;
+        this.birthYear = birthYear;
+        this.notes = notes;
     }
 }
