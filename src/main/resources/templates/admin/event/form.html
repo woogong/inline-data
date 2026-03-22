@@ -21,9 +21,7 @@
         .form-row .form-group { flex: 1; }
         .btn { display: inline-block; padding: 0.4rem 1rem; border: none; border-radius: 4px; cursor: pointer; text-decoration: none; font-size: 0.9rem; }
         .btn-primary { background: #3498db; color: #fff; }
-        .btn-primary:hover { background: #2980b9; }
         .btn-secondary { background: #95a5a6; color: #fff; }
-        .btn-secondary:hover { background: #7f8c8d; }
         .actions { margin-top: 1.5rem; }
         .actions > * { margin-right: 0.5rem; }
     </style>
@@ -31,29 +29,14 @@
 <body>
     <div th:replace="~{fragments/header :: header}"></div>
     <main class="container">
-        <h1 th:text="(${dto.id != null} ? '종목 수정' : '종목 등록') + ' - ' + ${competition.name}">종목 폼</h1>
-
-        <form th:action="${dto.id != null} ? @{/admin/competitions/{compId}/events/{id}(compId=${competition.id}, id=${dto.id})} : @{/admin/competitions/{compId}/events(compId=${competition.id})}"
+        <h1 th:text="(${dto.id != null} ? '종목 수정' : '종목 등록') + ' - ' + ${competition.shortName}">종목 폼</h1>
+        <form th:action="${dto.id != null} ? @{/admin/competitions/{compId}/events/{eventId}(compId=${competition.id}, eventId=${dto.id})} : @{/admin/competitions/{compId}/events(compId=${competition.id})}"
               method="post" th:object="${dto}">
-
-            <div class="form-row">
-                <div class="form-group">
-                    <label for="eventNumber">경기번호 *</label>
-                    <input type="number" id="eventNumber" th:field="*{eventNumber}" min="1" required>
-                    <div class="error" th:if="${#fields.hasErrors('eventNumber')}" th:errors="*{eventNumber}"></div>
-                </div>
-                <div class="form-group">
-                    <label for="dayNumber">대회일차</label>
-                    <input type="number" id="dayNumber" th:field="*{dayNumber}" min="1">
-                </div>
-            </div>
-
             <div class="form-group">
                 <label for="divisionName">부별명 *</label>
                 <input type="text" id="divisionName" th:field="*{divisionName}" maxlength="50" required placeholder="예: 여초부 5,6학년">
                 <div class="error" th:if="${#fields.hasErrors('divisionName')}" th:errors="*{divisionName}"></div>
             </div>
-
             <div class="form-row">
                 <div class="form-group">
                     <label for="gender">성별 *</label>
@@ -70,22 +53,10 @@
                     <input type="text" id="eventName" th:field="*{eventName}" maxlength="30" required placeholder="예: 500m+D, DTT200m">
                     <div class="error" th:if="${#fields.hasErrors('eventName')}" th:errors="*{eventName}"></div>
                 </div>
-                <div class="form-group">
-                    <label for="round">라운드</label>
-                    <select id="round" th:field="*{round}">
-                        <option value="">선택</option>
-                        <option value="예선">예선</option>
-                        <option value="준준결승">준준결승</option>
-                        <option value="준결승">준결승</option>
-                        <option value="결승">결승</option>
-                        <option value="조별결승">조별결승</option>
-                    </select>
-                </div>
             </div>
-
             <div class="actions">
                 <button type="submit" class="btn btn-primary" th:text="${dto.id != null} ? '수정' : '등록'">저장</button>
-                <a th:href="${dto.id != null} ? @{/admin/competitions/{compId}/events/{id}(compId=${competition.id}, id=${dto.id})} : @{/admin/competitions/{compId}/events(compId=${competition.id})}"
+                <a th:href="${dto.id != null} ? @{/admin/competitions/{compId}/events/{eventId}(compId=${competition.id}, eventId=${dto.id})} : @{/admin/competitions/{compId}/events(compId=${competition.id})}"
                    class="btn btn-secondary">취소</a>
             </div>
         </form>

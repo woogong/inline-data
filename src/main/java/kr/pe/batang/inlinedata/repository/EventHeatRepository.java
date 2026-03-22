@@ -7,5 +7,5 @@ import java.util.List;
 
 public interface EventHeatRepository extends JpaRepository<EventHeat, Long> {
 
-    List<EventHeat> findByEventIdOrderByHeatNumberAsc(Long eventId);
+    List<EventHeat> findByEventRoundIdOrderByHeatNumberAsc(Long eventRoundId);
 }

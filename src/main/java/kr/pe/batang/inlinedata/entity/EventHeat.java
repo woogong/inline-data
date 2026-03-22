@@ -31,8 +31,8 @@ public class EventHeat {
     private Long id;
 
     @ManyToOne(fetch = FetchType.LAZY)
-    @JoinColumn(name = "event_id", nullable = false)
-    private Event event;
+    @JoinColumn(name = "event_round_id", nullable = false)
+    private EventRound eventRound;
 
     @Column(nullable = false)
     private Integer heatNumber;
@@ -42,8 +42,8 @@ public class EventHeat {
     private LocalDateTime createdAt;
 
     @Builder
-    public EventHeat(Event event, Integer heatNumber) {
-        this.event = event;
+    public EventHeat(EventRound eventRound, Integer heatNumber) {
+        this.eventRound = eventRound;
         this.heatNumber = heatNumber;
     }
 }

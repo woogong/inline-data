@@ -1,0 +1,97 @@
+<!DOCTYPE html>
+<html xmlns:th="http://www.thymeleaf.org">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title th:text="${event.divisionName} + ' ' + ${event.eventName} + ' ' + ${round.round} + ' - InlineData'">경기 상세 - InlineData</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; color: #333; line-height: 1.6; }
+        .container { max-width: 960px; margin: 0 auto; padding: 0 1rem; }
+        nav { background: #2c3e50; color: #fff; padding: 0.8rem 0; }
+        nav a { color: #ecf0f1; text-decoration: none; margin-right: 1.5rem; }
+        nav a:hover { color: #fff; text-decoration: underline; }
+        nav .nav-brand { font-weight: bold; font-size: 1.1rem; }
+        main { padding: 1.5rem 0; }
+        .event-info { display: flex; gap: 2rem; margin: 0.5rem 0 1rem; color: #555; font-size: 0.95rem; }
+        .event-info span { font-weight: 600; }
+        h2 { margin-top: 1.5rem; margin-bottom: 0.3rem; color: #2c3e50; font-size: 1.1rem; }
+        table { width: 100%; border-collapse: collapse; margin: 0.3rem 0 1rem; }
+        th, td { padding: 0.4rem 0.8rem; border: 1px solid #ddd; text-align: left; }
+        th { background: #f5f5f5; font-weight: 600; }
+        tr:hover { background: #fafafa; }
+        .rank-1 { background: #fff9e6; }
+        .rank-2 { background: #f5f5f5; }
+        .rank-3 { background: #fef0e7; }
+        .q-mark { color: #27ae60; font-weight: 700; }
+        .new-record { font-weight: 600; font-size: 0.85rem; }
+        .new-record.nr-competition { color: #e74c3c; }
+        .new-record.nr-division { color: #e67e22; }
+        .new-record.nr-korea { color: #2980b9; }
+        .new-record.nr-world { color: #8e44ad; }
+        .note { color: #999; font-size: 0.85rem; }
+        .btn { display: inline-block; padding: 0.4rem 1rem; border: none; border-radius: 4px; cursor: pointer; text-decoration: none; font-size: 0.9rem; }
+        .btn-secondary { background: #95a5a6; color: #fff; }
+        .btn-secondary:hover { background: #7f8c8d; }
+        .actions { margin-top: 1.5rem; }
+        .empty { color: #999; font-style: italic; margin: 1rem 0; }
+    </style>
+</head>
+<body>
+    <div th:replace="~{fragments/header :: header}"></div>
+    <main class="container">
+        <h1 th:text="${event.divisionName} + ' ' + ${event.eventName} + ' ' + ${round.round}">경기</h1>
+        <div class="event-info">
+            <th:block th:if="${round.eventNumber != null}"><div>경기번호: <span th:text="'#' + ${round.eventNumber}"></span></div></th:block>
+            <th:block th:if="${round.dayNumber != null}"><div>일차: <span th:text="${round.dayNumber} + '일차'"></span></div></th:block>
+        </div>
+
+        <!-- 결과가 있는 경우 -->
+        <div th:if="${hasResults}">
+            <div th:each="heatEntry : ${heatsWithResults}">
+                <h2 th:text="${heatEntry.key.heatNumber == 0 ? '결승' : heatEntry.key.heatNumber + '조'}">조</h2>
+                <table>
+                    <thead><tr><th style="width:50px">순위</th><th style="width:60px">배번</th><th>선수명</th><th>소속</th><th>기록</th><th style="width:60px">진출</th><th>비고</th></tr></thead>
+                    <tbody>
+                        <tr th:each="er : ${heatEntry.value}" th:classappend="${er.ranking == 1 ? 'rank-1' : (er.ranking == 2 ? 'rank-2' : (er.ranking == 3 ? 'rank-3' : ''))}">
+                            <td th:text="${er.ranking}"></td>
+                            <td th:text="${er.heatEntry.bibNumber}"></td>
+                            <td th:text="${er.heatEntry.entry.athleteName}"></td>
+                            <td><span th:if="${er.heatEntry.entry.region != null}" th:text="${er.heatEntry.entry.region} + ' ' + ${er.heatEntry.entry.teamName}"></span></td>
+                            <td><span th:text="${er.record}"></span>
+                                <span th:if="${er.newRecord != null}" class="new-record"
+                                      th:classappend="${er.newRecord == '대회신' ? 'nr-competition' : (er.newRecord == '부별신' ? 'nr-division' : (er.newRecord == '한국신' ? 'nr-korea' : (er.newRecord == '세계신' ? 'nr-world' : '')))}"
+                                      th:text="' ' + ${er.newRecord}"></span></td>
+                            <td><span th:if="${er.qualification != null}" class="q-mark" th:text="${er.qualification}"></span></td>
+                            <td><span th:if="${er.note != null}" class="note" th:text="${er.note}"></span></td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
+        </div>
+
+        <!-- 결과 없음: 출전 목록 -->
+        <div th:if="${!hasResults}">
+            <div th:if="${heatsWithEntries.isEmpty()}" class="empty">출전 엔트리가 없습니다.</div>
+            <div th:each="heatEntry : ${heatsWithEntries}">
+                <h2 th:text="${heatEntry.key.heatNumber == 0 ? '결승' : heatEntry.key.heatNumber + '조'}">조</h2>
+                <table>
+                    <thead><tr><th style="width:60px">배번</th><th>선수명</th><th>소속</th><th>학년</th></tr></thead>
+                    <tbody>
+                        <tr th:each="he : ${heatEntry.value}">
+                            <td th:text="${he.bibNumber}"></td>
+                            <td th:text="${he.entry.athleteName}"></td>
+                            <td><span th:if="${he.entry.region != null}" th:text="${he.entry.region} + ' ' + ${he.entry.teamName}"></span></td>
+                            <td th:text="${he.entry.grade}"></td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
+        </div>
+
+        <div class="actions">
+            <a th:href="@{/competitions/{compId}/events/{eventId}(compId=${competition.id}, eventId=${event.id})}" class="btn btn-secondary">종목으로 돌아가기</a>
+        </div>
+    </main>
+</body>
+</html>

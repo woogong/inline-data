@@ -5,6 +5,8 @@ import kr.pe.batang.inlinedata.entity.Competition;
 import kr.pe.batang.inlinedata.entity.Event;
 import kr.pe.batang.inlinedata.repository.EventHeatRepository;
 import kr.pe.batang.inlinedata.repository.EventRepository;
+import kr.pe.batang.inlinedata.repository.EventResultRepository;
+import kr.pe.batang.inlinedata.repository.EventRoundRepository;
 import kr.pe.batang.inlinedata.repository.HeatEntryRepository;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -28,55 +30,36 @@ class EventServiceTest {
     @InjectMocks
     private EventService eventService;
 
-    @Mock
-    private EventRepository eventRepository;
-
-    @Mock
-    private EventHeatRepository eventHeatRepository;
-
-    @Mock
-    private HeatEntryRepository heatEntryRepository;
-
-    @Mock
-    private CompetitionService competitionService;
+    @Mock private EventRepository eventRepository;
+    @Mock private EventRoundRepository eventRoundRepository;
+    @Mock private EventHeatRepository eventHeatRepository;
+    @Mock private HeatEntryRepository heatEntryRepository;
+    @Mock private EventResultRepository eventResultRepository;
+    @Mock private CompetitionService competitionService;
 
     private Competition createCompetition() {
         return Competition.builder().name("테스트 대회").shortName("테스트").build();
     }
 
     private Event createEvent(Competition competition) {
-        return Event.builder()
-                .competition(competition)
-                .eventNumber(1)
-                .divisionName("여초부 5,6학년")
-                .gender("F")
-                .eventName("500m+D")
-                .round("예선")
-                .dayNumber(1)
-                .build();
+        return Event.builder().competition(competition)
+                .divisionName("여초부 5,6학년").gender("F").eventName("500m+D").build();
     }
 
     private EventFormDto createDto() {
         EventFormDto dto = new EventFormDto();
-        dto.setEventNumber(1);
         dto.setDivisionName("여초부 5,6학년");
         dto.setGender("F");
         dto.setEventName("500m+D");
-        dto.setRound("예선");
-        dto.setDayNumber(1);
         return dto;
     }
 
     @Test
     @DisplayName("대회별 종목 조회")
     void findByCompetitionId() {
-        Competition comp = createCompetition();
-        given(eventRepository.findByCompetitionIdOrderByEventNumberAsc(1L))
-                .willReturn(List.of(createEvent(comp)));
-
-        List<Event> result = eventService.findByCompetitionId(1L);
-
-        assertThat(result).hasSize(1);
+        given(eventRepository.findByCompetitionIdOrderByFirstEventNumber(1L))
+                .willReturn(List.of(createEvent(createCompetition())));
+        assertThat(eventService.findByCompetitionId(1L)).hasSize(1);
     }
 
     @Test
@@ -85,36 +68,25 @@ class EventServiceTest {
         Competition comp = createCompetition();
         given(competitionService.findById(1L)).willReturn(comp);
         given(eventRepository.save(any(Event.class))).willReturn(createEvent(comp));
-
-        Event result = eventService.create(1L, createDto());
-
-        assertThat(result.getEventName()).isEqualTo("500m+D");
-        then(eventRepository).should().save(any(Event.class));
+        assertThat(eventService.create(1L, createDto()).getEventName()).isEqualTo("500m+D");
     }
 
     @Test
     @DisplayName("종목 수정")
     void update() {
-        Competition comp = createCompetition();
-        Event event = createEvent(comp);
+        Event event = createEvent(createCompetition());
         given(eventRepository.findById(1L)).willReturn(Optional.of(event));
-
         EventFormDto dto = createDto();
         dto.setEventName("300m");
-
-        Event result = eventService.update(1L, dto);
-        assertThat(result.getEventName()).isEqualTo("300m");
+        assertThat(eventService.update(1L, dto).getEventName()).isEqualTo("300m");
     }
 
     @Test
     @DisplayName("종목 삭제")
     void delete() {
-        Competition comp = createCompetition();
-        Event event = createEvent(comp);
+        Event event = createEvent(createCompetition());
         given(eventRepository.findById(1L)).willReturn(Optional.of(event));
-
         eventService.delete(1L);
-
         then(eventRepository).should().delete(event);
     }
 
@@ -122,8 +94,6 @@ class EventServiceTest {
     @DisplayName("존재하지 않는 종목 조회")
     void findByIdNotFound() {
         given(eventRepository.findById(999L)).willReturn(Optional.empty());
-
-        assertThatThrownBy(() -> eventService.findById(999L))
-                .isInstanceOf(IllegalArgumentException.class);
+        assertThatThrownBy(() -> eventService.findById(999L)).isInstanceOf(IllegalArgumentException.class);
     }
 }

@@ -3,6 +3,9 @@ package kr.pe.batang.inlinedata.service;
 import kr.pe.batang.inlinedata.controller.dto.AthleteFormDto;
 import kr.pe.batang.inlinedata.entity.Athlete;
 import kr.pe.batang.inlinedata.repository.AthleteRepository;
+import kr.pe.batang.inlinedata.repository.CompetitionEntryRepository;
+import kr.pe.batang.inlinedata.repository.EventResultRepository;
+import kr.pe.batang.inlinedata.repository.HeatEntryRepository;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -10,6 +13,7 @@ import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 
+import java.util.List;
 import java.util.Optional;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -24,8 +28,10 @@ class AthleteServiceTest {
     @InjectMocks
     private AthleteService athleteService;
 
-    @Mock
-    private AthleteRepository athleteRepository;
+    @Mock private AthleteRepository athleteRepository;
+    @Mock private CompetitionEntryRepository competitionEntryRepository;
+    @Mock private HeatEntryRepository heatEntryRepository;
+    @Mock private EventResultRepository eventResultRepository;
 
     private AthleteFormDto createDto() {
         AthleteFormDto dto = new AthleteFormDto();
@@ -67,6 +73,7 @@ class AthleteServiceTest {
     void delete() {
         Athlete athlete = createAthlete();
         given(athleteRepository.findById(1L)).willReturn(Optional.of(athlete));
+        given(competitionEntryRepository.findByAthleteId(1L)).willReturn(List.of());
 
         athleteService.delete(1L);
 

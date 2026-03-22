@@ -1,0 +1,146 @@
+<!DOCTYPE html>
+<html xmlns:th="http://www.thymeleaf.org">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title th:text="${event.divisionName} + ' ' + ${event.eventName} + ' ' + ${round.round} + ' (관리)'">경기 상세 - InlineData</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; color: #333; line-height: 1.6; }
+        .container { max-width: 960px; margin: 0 auto; padding: 0 1rem; }
+        nav { background: #2c3e50; color: #fff; padding: 0.8rem 0; }
+        nav a { color: #ecf0f1; text-decoration: none; margin-right: 1.5rem; }
+        nav a:hover { color: #fff; text-decoration: underline; }
+        nav .nav-brand { font-weight: bold; font-size: 1.1rem; }
+        main { padding: 1.5rem 0; }
+        .event-info { display: flex; gap: 2rem; margin: 0.5rem 0 1rem; color: #555; font-size: 0.95rem; }
+        .event-info span { font-weight: 600; }
+        h2 { margin-top: 1.5rem; margin-bottom: 0.3rem; color: #2c3e50; font-size: 1.1rem; }
+        table { width: 100%; border-collapse: collapse; margin: 0.3rem 0 1rem; }
+        th, td { padding: 0.3rem 0.5rem; border: 1px solid #ddd; text-align: left; }
+        th { background: #f5f5f5; font-weight: 600; font-size: 0.85rem; }
+        tr:hover { background: #fafafa; }
+        td input, td select { width: 100%; padding: 0.2rem 0.3rem; border: 1px solid #e0e0e0; border-radius: 3px; font-size: 0.85rem; background: #fff; }
+        td input:focus, td select:focus { border-color: #3498db; outline: none; background: #f0f8ff; }
+        td.readonly { color: #333; font-size: 0.9rem; }
+        tr.saving { opacity: 0.6; }
+        tr.saved td input, tr.saved td select { border-color: #27ae60; }
+        tr.save-error td input, tr.save-error td select { border-color: #e74c3c; }
+        .status-icon { display: inline-block; width: 16px; text-align: center; font-size: 0.8rem; }
+        .btn { display: inline-block; padding: 0.4rem 1rem; border: none; border-radius: 4px; cursor: pointer; text-decoration: none; font-size: 0.9rem; }
+        .btn-primary { background: #3498db; color: #fff; }
+        .btn-primary:hover { background: #2980b9; }
+        .btn-success { background: #27ae60; color: #fff; }
+        .btn-success:hover { background: #219a52; }
+        .btn-secondary { background: #95a5a6; color: #fff; }
+        .btn-secondary:hover { background: #7f8c8d; }
+        .actions { margin-top: 1.5rem; }
+        .actions > * { margin-right: 0.5rem; }
+        .empty { color: #999; font-style: italic; margin: 1rem 0; }
+    </style>
+</head>
+<body>
+    <div th:replace="~{fragments/header :: header}"></div>
+    <main class="container">
+        <h1 th:text="${event.divisionName} + ' ' + ${event.eventName} + ' ' + ${round.round}">경기</h1>
+        <div class="event-info">
+            <th:block th:if="${round.eventNumber != null}"><div>경기번호: <span th:text="'#' + ${round.eventNumber}"></span></div></th:block>
+            <th:block th:if="${round.dayNumber != null}"><div>일차: <span th:text="${round.dayNumber} + '일차'"></span></div></th:block>
+        </div>
+
+        <div th:if="${heatsWithEntries.isEmpty()}" class="empty">출전 엔트리가 없습니다.</div>
+
+        <div th:if="${!heatsWithEntries.isEmpty()}">
+            <th:block th:each="heatEntry : ${heatsWithEntries}">
+                <h2 th:text="${heatEntry.key.heatNumber == 0 ? '결승' : heatEntry.key.heatNumber + '조'}">조</h2>
+                <table>
+                    <thead>
+                        <tr>
+                            <th style="width:50px">배번</th>
+                            <th style="width:100px">선수명</th>
+                            <th>소속</th>
+                            <th style="width:55px">순위</th>
+                            <th style="width:100px">기록</th>
+                            <th style="width:70px">신기록</th>
+                            <th style="width:50px">진출</th>
+                            <th style="width:100px">비고</th>
+                            <th style="width:20px"></th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <tr th:each="he : ${heatEntry.value}" class="result-row" th:attr="data-entry-id=${he.id}">
+                            <td class="readonly" th:text="${he.bibNumber}"></td>
+                            <td class="readonly" th:text="${he.entry.athleteName}"></td>
+                            <td class="readonly"><span th:if="${he.entry.region != null}" th:text="${he.entry.region} + ' ' + ${he.entry.teamName}"></span></td>
+                            <th:block th:with="r=${resultByEntryId[he.id]}">
+                                <td><input type="text" data-field="ranking" th:value="${r != null ? r.ranking : ''}" style="width:40px; text-align:center;"></td>
+                                <td><input type="text" data-field="record" th:value="${r != null ? r.record : ''}" placeholder="00.000"></td>
+                                <td>
+                                    <select data-field="newRecord" style="width:70px; font-size:0.85rem; padding:0.2rem;">
+                                        <option value="" th:selected="${r == null or r.newRecord == null}"></option>
+                                        <option value="대회신" th:selected="${r != null and r.newRecord == '대회신'}">대회신</option>
+                                        <option value="부별신" th:selected="${r != null and r.newRecord == '부별신'}">부별신</option>
+                                        <option value="한국신" th:selected="${r != null and r.newRecord == '한국신'}">한국신</option>
+                                        <option value="세계신" th:selected="${r != null and r.newRecord == '세계신'}">세계신</option>
+                                    </select>
+                                </td>
+                                <td><input type="text" data-field="qualification" th:value="${r != null ? r.qualification : ''}" style="width:35px; text-align:center;"></td>
+                                <td><input type="text" data-field="note" th:value="${r != null ? r.note : ''}"></td>
+                            </th:block>
+                            <td><span class="status-icon"></span></td>
+                        </tr>
+                    </tbody>
+                </table>
+            </th:block>
+        </div>
+
+        <div class="actions">
+            <button type="button" class="btn btn-success"
+                    th:onclick="'location.href=\'' + @{/admin/competitions/{compId}/events/{eventId}/rounds/{roundId}/entries(compId=${competition.id}, eventId=${event.id}, roundId=${round.id})} + '\''">엔트리 등록</button>
+            <a th:href="@{/admin/competitions/{compId}/events/{eventId}(compId=${competition.id}, eventId=${event.id})}" class="btn btn-secondary">종목으로 돌아가기</a>
+        </div>
+    </main>
+
+    <script th:inline="javascript">
+        const SAVE_URL = [[@{/admin/competitions/{compId}/events/{eventId}/rounds/{roundId}/results/save(compId=${competition.id}, eventId=${event.id}, roundId=${round.id})}]];
+        const timers = {};
+
+        function getRowData(row) {
+            return {
+                heatEntryId: row.dataset.entryId,
+                ranking: row.querySelector('[data-field="ranking"]').value,
+                record: row.querySelector('[data-field="record"]').value,
+                newRecord: row.querySelector('[data-field="newRecord"]').value,
+                qualification: row.querySelector('[data-field="qualification"]').value,
+                note: row.querySelector('[data-field="note"]').value
+            };
+        }
+
+        function saveRow(row) {
+            const icon = row.querySelector('.status-icon');
+            row.classList.remove('saved', 'save-error');
+            row.classList.add('saving');
+            icon.textContent = '...';
+            fetch(SAVE_URL, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(getRowData(row)) })
+            .then(res => {
+                row.classList.remove('saving');
+                if (res.ok) { row.classList.add('saved'); icon.textContent = '\u2713'; setTimeout(() => { row.classList.remove('saved'); icon.textContent = ''; }, 2000); }
+                else { row.classList.add('save-error'); icon.textContent = '\u2717'; }
+            }).catch(() => { row.classList.remove('saving'); row.classList.add('save-error'); icon.textContent = '\u2717'; });
+        }
+
+        function scheduleAutoSave(row) {
+            const id = row.dataset.entryId;
+            if (timers[id]) clearTimeout(timers[id]);
+            timers[id] = setTimeout(() => saveRow(row), 500);
+        }
+
+        document.querySelectorAll('.result-row').forEach(row => {
+            row.querySelectorAll('input, select').forEach(el => {
+                el.addEventListener('input', () => scheduleAutoSave(row));
+                el.addEventListener('change', () => scheduleAutoSave(row));
+            });
+        });
+    </script>
+</body>
+</html>
