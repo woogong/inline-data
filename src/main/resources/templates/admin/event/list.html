@@ -44,6 +44,7 @@
                 <input type="file" name="file" accept=".pdf" required style="font-size:0.85rem;">
                 <button type="submit" class="btn btn-primary">조편성 PDF 가져오기</button>
             </form>
+            <a th:href="@{/admin/competitions/{compId}/mapping(compId=${competition.id})}" class="btn btn-primary">선수 매핑</a>
             <a th:href="@{/admin/competitions/{id}(id=${competition.id})}" class="btn btn-secondary">대회로 돌아가기</a>
         </div>
 
