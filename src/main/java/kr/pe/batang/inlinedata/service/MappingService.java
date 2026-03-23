@@ -2,8 +2,10 @@ package kr.pe.batang.inlinedata.service;
 
 import kr.pe.batang.inlinedata.entity.Athlete;
 import kr.pe.batang.inlinedata.entity.CompetitionEntry;
+import kr.pe.batang.inlinedata.entity.Team;
 import kr.pe.batang.inlinedata.repository.AthleteRepository;
 import kr.pe.batang.inlinedata.repository.CompetitionEntryRepository;
+import kr.pe.batang.inlinedata.repository.TeamRepository;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -19,6 +21,7 @@ public class MappingService {
 
     private final CompetitionEntryRepository entryRepository;
     private final AthleteRepository athleteRepository;
+    private final TeamRepository teamRepository;
 
     public record HistoryDto(String competitionName, String teamName, String region, Integer grade) {}
 
@@ -143,13 +146,82 @@ public class MappingService {
         return athlete.getId();
     }
 
-    /**
-     * Unmap a CompetitionEntry from its Athlete.
-     */
     @Transactional
     public void unmap(Long entryId) {
         CompetitionEntry entry = entryRepository.findById(entryId)
                 .orElseThrow(() -> new IllegalArgumentException("엔트리를 찾을 수 없습니다. id=" + entryId));
         entry.unmapAthlete();
+    }
+
+    // ===== Team 매핑 =====
+
+    public record TeamCandidateDto(Long teamId, String name, String region) {}
+
+    public List<TeamCandidateDto> findTeamCandidates(Long entryId) {
+        CompetitionEntry entry = entryRepository.findById(entryId)
+                .orElseThrow(() -> new IllegalArgumentException("엔트리를 찾을 수 없습니다. id=" + entryId));
+        String teamName = entry.getTeamName();
+        if (teamName == null || teamName.isBlank()) return List.of();
+
+        return teamRepository.findAll().stream()
+                .filter(t -> t.getName().contains(teamName) || teamName.contains(t.getName()))
+                .map(t -> new TeamCandidateDto(t.getId(), t.getName(), t.getRegion()))
+                .toList();
+    }
+
+    @Transactional
+    public int autoMatchTeams(Long competitionId) {
+        List<CompetitionEntry> unmapped = entryRepository.findByCompetitionIdAndTeamIsNull(competitionId);
+        int matched = 0;
+
+        Map<String, List<CompetitionEntry>> grouped = unmapped.stream()
+                .filter(e -> e.getTeamName() != null && !e.getTeamName().isBlank()
+                        && e.getRegion() != null && !e.getRegion().isBlank())
+                .collect(Collectors.groupingBy(e -> e.getTeamName() + "|" + e.getRegion()));
+
+        for (Map.Entry<String, List<CompetitionEntry>> group : grouped.entrySet()) {
+            List<CompetitionEntry> entries = group.getValue();
+            CompetitionEntry sample = entries.getFirst();
+
+            Team team = teamRepository.findByNameAndRegion(sample.getTeamName(), sample.getRegion())
+                    .orElseGet(() -> teamRepository.save(Team.builder()
+                            .name(sample.getTeamName())
+                            .region(sample.getRegion())
+                            .build()));
+
+            for (CompetitionEntry entry : entries) {
+                entry.mapTeam(team);
+                matched++;
+            }
+        }
+        return matched;
+    }
+
+    @Transactional
+    public void mapToTeam(Long entryId, Long teamId) {
+        CompetitionEntry entry = entryRepository.findById(entryId)
+                .orElseThrow(() -> new IllegalArgumentException("엔트리를 찾을 수 없습니다. id=" + entryId));
+        Team team = teamRepository.findById(teamId)
+                .orElseThrow(() -> new IllegalArgumentException("팀을 찾을 수 없습니다. id=" + teamId));
+        entry.mapTeam(team);
+    }
+
+    @Transactional
+    public Long createAndMapTeam(Long entryId) {
+        CompetitionEntry entry = entryRepository.findById(entryId)
+                .orElseThrow(() -> new IllegalArgumentException("엔트리를 찾을 수 없습니다. id=" + entryId));
+        Team team = teamRepository.save(Team.builder()
+                .name(entry.getTeamName())
+                .region(entry.getRegion())
+                .build());
+        entry.mapTeam(team);
+        return team.getId();
+    }
+
+    @Transactional
+    public void unmapTeam(Long entryId) {
+        CompetitionEntry entry = entryRepository.findById(entryId)
+                .orElseThrow(() -> new IllegalArgumentException("엔트리를 찾을 수 없습니다. id=" + entryId));
+        entry.unmapTeam();
     }
 }

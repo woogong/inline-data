@@ -29,11 +29,17 @@ public class AdminMappingController {
     private final CompetitionEntryRepository entryRepository;
 
     @GetMapping
-    public String mappingPage(@PathVariable Long compId, Model model) {
+    public String mappingPage(@PathVariable Long compId,
+                              @RequestParam(defaultValue = "athlete") String tab,
+                              Model model) {
         Competition competition = competitionService.findById(compId);
-        List<CompetitionEntry> entries = entryRepository.findIndividualEntriesWithAthlete(compId);
         model.addAttribute("competition", competition);
-        model.addAttribute("entries", entries);
+        model.addAttribute("tab", tab);
+        if ("team".equals(tab)) {
+            model.addAttribute("entries", entryRepository.findIndividualEntriesWithTeam(compId));
+        } else {
+            model.addAttribute("entries", entryRepository.findIndividualEntriesWithAthlete(compId));
+        }
         return "admin/competition/mapping";
     }
 
@@ -89,6 +95,61 @@ public class AdminMappingController {
     public Map<String, String> unmap(@PathVariable Long compId,
                                      @RequestBody Map<String, Long> body) {
         mappingService.unmap(body.get("entryId"));
+        return Map.of("status", "ok");
+    }
+
+    // ===== Team 매핑 =====
+
+    @GetMapping("/team-candidates")
+    @ResponseBody
+    public List<MappingService.TeamCandidateDto> teamCandidates(@PathVariable Long compId,
+                                                                 @RequestParam Long entryId) {
+        return mappingService.findTeamCandidates(entryId);
+    }
+
+    @PostMapping("/team-auto")
+    @ResponseBody
+    public Map<String, Integer> autoMatchTeams(@PathVariable Long compId) {
+        int matched = mappingService.autoMatchTeams(compId);
+        return Map.of("matched", matched);
+    }
+
+    @PostMapping("/team-map")
+    @ResponseBody
+    public Map<String, String> mapTeam(@PathVariable Long compId,
+                                       @RequestBody Map<String, Long> body) {
+        mappingService.mapToTeam(body.get("entryId"), body.get("teamId"));
+        return Map.of("status", "ok");
+    }
+
+    @PostMapping("/team-create")
+    @ResponseBody
+    public Map<String, Object> createTeam(@PathVariable Long compId,
+                                          @RequestBody Map<String, Object> body) {
+        Long entryId = Long.parseLong(body.get("entryId").toString());
+        Long teamId = mappingService.createAndMapTeam(entryId);
+        return Map.of("status", "ok", "teamId", teamId);
+    }
+
+    @PostMapping("/team-create-bulk")
+    @ResponseBody
+    @SuppressWarnings("unchecked")
+    public Map<String, Object> createTeamBulk(@PathVariable Long compId,
+                                              @RequestBody Map<String, Object> body) {
+        List<Number> entryIds = (List<Number>) body.get("entryIds");
+        int created = 0;
+        for (Number id : entryIds) {
+            mappingService.createAndMapTeam(id.longValue());
+            created++;
+        }
+        return Map.of("status", "ok", "created", created);
+    }
+
+    @PostMapping("/team-unmap")
+    @ResponseBody
+    public Map<String, String> unmapTeam(@PathVariable Long compId,
+                                         @RequestBody Map<String, Long> body) {
+        mappingService.unmapTeam(body.get("entryId"));
         return Map.of("status", "ok");
     }
 }
