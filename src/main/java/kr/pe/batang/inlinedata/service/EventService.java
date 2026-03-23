@@ -16,10 +16,12 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.util.Comparator;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
+import java.util.Set;
 import java.util.stream.Collectors;
 
 @Service
@@ -66,8 +68,29 @@ public class EventService {
 
     // --- EventRound (경기/라운드) ---
 
+    public record RoundWithStatus(EventRound round, String status, int entryCount, int resultCount) {}
+
     public List<EventRound> findRoundsByEventId(Long eventId) {
         return eventRoundRepository.findByEventIdOrderByEventNumberAsc(eventId);
+    }
+
+    public List<RoundWithStatus> findRoundsWithStatus(Long eventId) {
+        List<EventRound> rounds = eventRoundRepository.findByEventIdOrderByEventNumberAsc(eventId);
+        return rounds.stream().map(r -> {
+            List<EventHeat> heats = eventHeatRepository.findByEventRoundIdOrderByHeatNumberAsc(r.getId());
+            int entryCount = 0, resultCount = 0;
+            if (!heats.isEmpty()) {
+                List<Long> heatIds = heats.stream().map(EventHeat::getId).toList();
+                entryCount = heatEntryRepository.findByHeatIdsWithDetails(heatIds).size();
+                resultCount = eventResultRepository.findByHeatIdsWithDetails(heatIds).size();
+            }
+            String status;
+            if (resultCount > 0 && resultCount >= entryCount) status = "완료";
+            else if (resultCount > 0) status = "일부";
+            else if (entryCount > 0) status = "엔트리만";
+            else status = "없음";
+            return new RoundWithStatus(r, status, entryCount, resultCount);
+        }).toList();
     }
 
     public EventRound findRoundById(Long id) {
@@ -82,8 +105,27 @@ public class EventService {
         if (heats.isEmpty()) return Map.of();
         List<Long> heatIds = heats.stream().map(EventHeat::getId).toList();
         List<HeatEntry> entries = heatEntryRepository.findByHeatIdsWithDetails(heatIds);
+
+        // 결과가 있는 heatEntry ID를 수집
+        List<EventResult> allResults = eventResultRepository.findByHeatIdsWithDetails(heatIds);
+        Map<Long, EventResult> resultByEntryId = allResults.stream()
+                .collect(Collectors.toMap(er -> er.getHeatEntry().getId(), er -> er, (a, b) -> a));
+        Set<Long> heatsWithResults = allResults.stream()
+                .map(er -> er.getHeatEntry().getHeat().getId())
+                .collect(Collectors.toSet());
+
+        // 결과가 있는 조는 순위 순, 없는 조는 배번 순
         Map<Long, List<HeatEntry>> entriesByHeatId = entries.stream()
                 .collect(Collectors.groupingBy(he -> he.getHeat().getId()));
+        for (Map.Entry<Long, List<HeatEntry>> e : entriesByHeatId.entrySet()) {
+            Long heatId = e.getKey();
+            if (heatsWithResults.contains(heatId)) {
+                e.getValue().sort(Comparator.comparingInt(he -> {
+                    EventResult r = resultByEntryId.get(he.getId());
+                    return r != null && r.getRanking() != null ? r.getRanking() : Integer.MAX_VALUE;
+                }));
+            }
+        }
         Map<EventHeat, List<HeatEntry>> result = new LinkedHashMap<>();
         for (EventHeat heat : heats) {
             result.put(heat, entriesByHeatId.getOrDefault(heat.getId(), List.of()));

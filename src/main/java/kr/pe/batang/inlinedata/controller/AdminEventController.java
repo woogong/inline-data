@@ -8,6 +8,7 @@ import kr.pe.batang.inlinedata.service.CompetitionService;
 import kr.pe.batang.inlinedata.service.EntryImportService;
 import kr.pe.batang.inlinedata.service.EntryService;
 import kr.pe.batang.inlinedata.service.EventService;
+import kr.pe.batang.inlinedata.service.ResultParsingService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Controller;
@@ -26,6 +27,7 @@ import org.springframework.web.servlet.mvc.support.RedirectAttributes;
 
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 import java.util.TreeMap;
@@ -41,6 +43,7 @@ public class AdminEventController {
     private final CompetitionService competitionService;
     private final EntryService entryService;
     private final EntryImportService entryImportService;
+    private final ResultParsingService resultParsingService;
 
     // --- 종목 목록 ---
 
@@ -51,14 +54,57 @@ public class AdminEventController {
         return "admin/event/list";
     }
 
+    @PostMapping("/import-result")
+    @ResponseBody
+    public Map<String, Object> importResultAtListLevel(@PathVariable Long compId,
+                                                       @RequestParam("file") MultipartFile file) {
+        String fileName = file.getOriginalFilename();
+        try {
+            Path temp = Files.createTempFile("result-", ".pdf");
+            try (var out = Files.newOutputStream(temp)) {
+                file.getInputStream().transferTo(out);
+                out.flush();
+            }
+            var result = resultParsingService.parseResultPdf(temp, compId);
+            Files.deleteIfExists(temp);
+            log.info("결과 PDF import 성공: {} → 결과 {}건, 새 엔트리 {}건",
+                    fileName, result.results(), result.newEntries());
+            return Map.of("status", "ok", "fileName", fileName != null ? fileName : "",
+                    "results", result.results(), "newEntries", result.newEntries());
+        } catch (Exception e) {
+            String msg = e.getMessage() != null ? e.getMessage() : e.getClass().getSimpleName();
+            log.error("결과 PDF import 실패: {} - {}", fileName, msg, e);
+            return Map.of("status", "error", "fileName", fileName != null ? fileName : "", "message", msg);
+        }
+    }
+
     // --- 종목 상세 (라운드 목록) ---
 
     @GetMapping("/{eventId}")
     public String detail(@PathVariable Long compId, @PathVariable Long eventId, Model model) {
         model.addAttribute("competition", competitionService.findById(compId));
         model.addAttribute("event", eventService.findById(eventId));
-        model.addAttribute("rounds", eventService.findRoundsByEventId(eventId));
+        model.addAttribute("roundsWithStatus", eventService.findRoundsWithStatus(eventId));
         return "admin/event/detail";
+    }
+
+    @PostMapping("/{eventId}/import-result")
+    @ResponseBody
+    public Map<String, Object> importResultFile(@PathVariable Long compId, @PathVariable Long eventId,
+                                                @RequestParam("file") MultipartFile file) {
+        try {
+            Path temp = Files.createTempFile("result-", ".pdf");
+            try (var out = Files.newOutputStream(temp)) {
+                file.getInputStream().transferTo(out);
+                out.flush();
+            }
+            var result = resultParsingService.parseResultPdf(temp, compId);
+            Files.deleteIfExists(temp);
+            return Map.of("status", "ok", "results", result.results(), "newEntries", result.newEntries());
+        } catch (Exception e) {
+            log.error("결과 PDF import 실패: {}", file.getOriginalFilename(), e);
+            return Map.of("status", "error", "message", e.getMessage());
+        }
     }
 
     // --- 라운드 상세 (결과 편집) ---
