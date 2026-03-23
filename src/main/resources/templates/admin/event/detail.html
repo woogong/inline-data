@@ -25,15 +25,32 @@
         .btn-danger:hover { background: #c0392b; }
         .btn-secondary { background: #95a5a6; color: #fff; }
         .btn-secondary:hover { background: #7f8c8d; }
-        .actions { margin-top: 1.5rem; }
-        .actions > * { margin-right: 0.5rem; }
+        .actions { margin-top: 1.5rem; display: flex; gap: 0.5rem; align-items: center; flex-wrap: wrap; }
         .delete-form { display: inline; }
+        .badge { display: inline-block; padding: 0.15rem 0.5rem; border-radius: 10px; font-size: 0.75rem; font-weight: 600; }
+        .badge-done { background: #d4edda; color: #155724; }
+        .badge-partial { background: #fff3cd; color: #856404; }
+        .badge-entry { background: #cce5ff; color: #004085; }
+        .badge-empty { background: #f8d7da; color: #721c24; }
+        .msg-success { padding: 0.6rem 1rem; background: #d4edda; color: #155724; border: 1px solid #c3e6cb; border-radius: 4px; margin-bottom: 1rem; }
+        .msg-error { padding: 0.6rem 1rem; background: #f8d7da; color: #721c24; border: 1px solid #f5c6cb; border-radius: 4px; margin-bottom: 1rem; }
+        .import-bar { display: flex; gap: 0.5rem; align-items: center; margin: 1rem 0; padding: 0.8rem; background: #f8f9fa; border-radius: 6px; flex-wrap: wrap; }
     </style>
 </head>
 <body>
     <div th:replace="~{fragments/header :: header}"></div>
     <main class="container">
         <h1 th:text="${event.divisionName} + ' ' + ${event.eventName}">종목</h1>
+
+        <div th:if="${message}" class="msg-success" th:text="${message}"></div>
+        <div th:if="${errorMessage}" class="msg-error" th:text="${errorMessage}"></div>
+
+        <div class="import-bar">
+            <span style="font-weight:600;">결과 PDF 가져오기:</span>
+            <input type="file" id="resultFiles" accept=".pdf" multiple style="font-size:0.85rem;">
+            <button class="btn btn-primary" onclick="uploadResultFiles()">가져오기</button>
+            <span id="uploadProgress" style="font-size:0.85rem; color:#666;"></span>
+        </div>
 
         <h2>경기 목록</h2>
         <table>
@@ -42,17 +59,28 @@
                     <th style="width:60px">번호</th>
                     <th>라운드</th>
                     <th>일차</th>
+                    <th style="width:80px">엔트리</th>
+                    <th style="width:80px">결과</th>
+                    <th style="width:80px">상태</th>
                 </tr>
             </thead>
             <tbody>
-                <tr th:each="r : ${rounds}">
-                    <td th:text="${r.eventNumber}"></td>
-                    <td><a th:href="@{/admin/competitions/{compId}/events/{eventId}/rounds/{roundId}(compId=${competition.id}, eventId=${event.id}, roundId=${r.id})}"
-                           th:text="${r.round}"></a></td>
-                    <td th:text="${r.dayNumber != null ? r.dayNumber + '일차' : ''}"></td>
+                <tr th:each="rs : ${roundsWithStatus}">
+                    <td th:text="${rs.round.eventNumber}"></td>
+                    <td><a th:href="@{/admin/competitions/{compId}/events/{eventId}/rounds/{roundId}(compId=${competition.id}, eventId=${event.id}, roundId=${rs.round.id})}"
+                           th:text="${rs.round.round}"></a></td>
+                    <td th:text="${rs.round.dayNumber != null ? rs.round.dayNumber + '일차' : ''}"></td>
+                    <td th:text="${rs.entryCount} + '명'"></td>
+                    <td th:text="${rs.resultCount} + '건'"></td>
+                    <td>
+                        <span th:if="${rs.status == '완료'}" class="badge badge-done">완료</span>
+                        <span th:if="${rs.status == '일부'}" class="badge badge-partial">일부</span>
+                        <span th:if="${rs.status == '엔트리만'}" class="badge badge-entry">엔트리만</span>
+                        <span th:if="${rs.status == '없음'}" class="badge badge-empty">없음</span>
+                    </td>
                 </tr>
-                <tr th:if="${rounds.isEmpty()}">
-                    <td colspan="3" style="text-align:center; color:#999;">등록된 경기가 없습니다.</td>
+                <tr th:if="${roundsWithStatus.isEmpty()}">
+                    <td colspan="6" style="text-align:center; color:#999;">등록된 경기가 없습니다.</td>
                 </tr>
             </tbody>
         </table>
@@ -66,5 +94,47 @@
             <a th:href="@{/admin/competitions/{compId}/events(compId=${competition.id})}" class="btn btn-secondary">종목 목록으로</a>
         </div>
     </main>
+
+    <script th:inline="javascript">
+        const IMPORT_URL = [[@{/admin/competitions/{compId}/events/{eventId}/import-result(compId=${competition.id}, eventId=${event.id})}]];
+
+        async function uploadResultFiles() {
+            const input = document.getElementById('resultFiles');
+            const files = input.files;
+            if (files.length === 0) { alert('파일을 선택해주세요.'); return; }
+
+            const progress = document.getElementById('uploadProgress');
+            let totalResults = 0, totalNewEntries = 0, done = 0;
+            const failures = [];
+
+            for (let i = 0; i < files.length; i++) {
+                progress.textContent = `처리 중... (${i + 1}/${files.length})`;
+                const formData = new FormData();
+                formData.append('file', files[i]);
+                try {
+                    const res = await fetch(IMPORT_URL, { method: 'POST', body: formData });
+                    const data = await res.json();
+                    if (data.status === 'ok') {
+                        totalResults += data.results;
+                        totalNewEntries += data.newEntries;
+                        done++;
+                    } else {
+                        failures.push(files[i].name + ': ' + (data.message || '알 수 없는 오류'));
+                    }
+                } catch (e) {
+                    failures.push(files[i].name + ': ' + e.message);
+                }
+                if (i < files.length - 1) await new Promise(r => setTimeout(r, 300));
+            }
+
+            progress.textContent = '';
+            let msg = `${done}개 파일 처리 완료: 결과 ${totalResults}건, 새 엔트리 ${totalNewEntries}건`;
+            if (failures.length > 0) {
+                msg += `\n\n실패 ${failures.length}건:\n` + failures.join('\n');
+            }
+            alert(msg);
+            if (done > 0) location.reload();
+        }
+    </script>
 </body>
 </html>

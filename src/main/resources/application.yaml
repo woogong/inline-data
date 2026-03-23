@@ -1,3 +1,10 @@
+server:
+  tomcat:
+    max-swallow-size: -1
+    max-http-form-post-size: -1
+    connection-timeout: -1
+    keep-alive-timeout: -1
+
 spring:
   application:
     name: inlinedata
@@ -6,6 +13,10 @@ spring:
     username: root
     password: parksj11
     driver-class-name: org.mariadb.jdbc.Driver
+  servlet:
+    multipart:
+      max-file-size: -1
+      max-request-size: -1
   jpa:
     hibernate:
       ddl-auto: update

@@ -114,15 +114,16 @@ public class EntryParsingService {
         ProcessBuilder pb = new ProcessBuilder("pdftotext", "-layout", pdfPath.toString(), "-");
         pb.redirectErrorStream(true);
         Process process = pb.start();
-        try (BufferedReader reader = new BufferedReader(new InputStreamReader(process.getInputStream()))) {
-            StringBuilder sb = new StringBuilder();
-            String line;
-            while ((line = reader.readLine()) != null) {
-                sb.append(line).append("\n");
+        try {
+            String text = new String(process.getInputStream().readAllBytes());
+            boolean finished = process.waitFor(30, java.util.concurrent.TimeUnit.SECONDS);
+            if (!finished) {
+                process.destroyForcibly();
+                return null;
             }
-            process.waitFor();
-            return sb.toString();
+            return text;
         } catch (InterruptedException e) {
+            process.destroyForcibly();
             Thread.currentThread().interrupt();
             return null;
         }

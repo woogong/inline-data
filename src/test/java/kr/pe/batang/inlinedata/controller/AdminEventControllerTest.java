@@ -7,6 +7,7 @@ import kr.pe.batang.inlinedata.service.CompetitionService;
 import kr.pe.batang.inlinedata.service.EntryImportService;
 import kr.pe.batang.inlinedata.service.EntryService;
 import kr.pe.batang.inlinedata.service.EventService;
+import kr.pe.batang.inlinedata.service.ResultParsingService;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -34,6 +35,7 @@ class AdminEventControllerTest {
     @MockitoBean private CompetitionService competitionService;
     @MockitoBean private EntryService entryService;
     @MockitoBean private EntryImportService entryImportService;
+    @MockitoBean private ResultParsingService resultParsingService;
 
     private Competition createCompetition() {
         return Competition.builder().name("테스트 대회").shortName("테스트").build();
