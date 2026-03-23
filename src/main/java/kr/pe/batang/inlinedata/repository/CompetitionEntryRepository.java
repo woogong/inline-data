@@ -44,4 +44,16 @@ public interface CompetitionEntryRepository extends JpaRepository<CompetitionEnt
             Long competitionId, String athleteName, String gender, String teamName);
 
     List<CompetitionEntry> findByCompetitionIdAndAthleteIsNull(Long competitionId);
+
+    List<CompetitionEntry> findByCompetitionIdAndTeamIsNull(Long competitionId);
+
+    @Query("SELECT DISTINCT ce FROM CompetitionEntry ce " +
+           "LEFT JOIN FETCH ce.team " +
+           "JOIN HeatEntry he ON he.entry = ce " +
+           "JOIN he.heat eh " +
+           "JOIN eh.eventRound er " +
+           "JOIN er.event e " +
+           "WHERE ce.competition.id = :compId AND e.teamEvent = false " +
+           "ORDER BY ce.teamName")
+    List<CompetitionEntry> findIndividualEntriesWithTeam(@Param("compId") Long competitionId);
 }
