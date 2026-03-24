@@ -38,8 +38,40 @@ public class EventService {
 
     // --- Event (종목) ---
 
+    public record MedalInfo(String gold, String silver, String bronze) {}
+
     public List<Event> findByCompetitionId(Long competitionId) {
         return eventRepository.findByCompetitionIdOrderByFirstEventNumber(competitionId);
+    }
+
+    public Map<Long, MedalInfo> findMedalsByCompetitionId(Long competitionId) {
+        List<Event> events = findByCompetitionId(competitionId);
+        Map<Long, MedalInfo> medals = new LinkedHashMap<>();
+        for (Event event : events) {
+            // 결승 라운드 찾기
+            List<EventRound> rounds = eventRoundRepository.findByEventIdOrderByEventNumberAsc(event.getId());
+            EventRound finalRound = rounds.stream()
+                    .filter(r -> "결승".equals(r.getRound()) || "조별결승".equals(r.getRound()))
+                    .findFirst().orElse(null);
+            if (finalRound == null) { medals.put(event.getId(), new MedalInfo(null, null, null)); continue; }
+
+            List<EventHeat> heats = eventHeatRepository.findByEventRoundIdOrderByHeatNumberAsc(finalRound.getId());
+            if (heats.isEmpty()) { medals.put(event.getId(), new MedalInfo(null, null, null)); continue; }
+
+            List<Long> heatIds = heats.stream().map(EventHeat::getId).toList();
+            List<EventResult> results = eventResultRepository.findByHeatIdsWithDetails(heatIds);
+
+            String gold = null, silver = null, bronze = null;
+            for (EventResult er : results) {
+                if (er.getRanking() == null) continue;
+                String name = er.getHeatEntry().getEntry().getAthleteName();
+                if (er.getRanking() == 1) gold = name;
+                else if (er.getRanking() == 2) silver = name;
+                else if (er.getRanking() == 3) bronze = name;
+            }
+            medals.put(event.getId(), new MedalInfo(gold, silver, bronze));
+        }
+        return medals;
     }
 
     public Event findById(Long id) {

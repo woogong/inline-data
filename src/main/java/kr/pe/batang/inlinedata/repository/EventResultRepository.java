@@ -18,6 +18,6 @@ public interface EventResultRepository extends JpaRepository<EventResult, Long> 
            "LEFT JOIN FETCH ce.athlete " +
            "LEFT JOIN FETCH ce.team " +
            "WHERE he.heat.id IN :heatIds " +
-           "ORDER BY he.heat.id, er.ranking")
+           "ORDER BY he.heat.id, er.ranking ASC NULLS LAST")
     List<EventResult> findByHeatIdsWithDetails(@Param("heatIds") List<Long> heatIds);
 }
