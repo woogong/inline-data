@@ -23,6 +23,7 @@ public class EventController {
     public String list(@PathVariable Long compId, Model model) {
         model.addAttribute("competition", competitionService.findById(compId));
         model.addAttribute("events", eventService.findByCompetitionId(compId));
+        model.addAttribute("medals", eventService.findMedalsByCompetitionId(compId));
         return "event/list";
     }
 
@@ -42,6 +43,8 @@ public class EventController {
         model.addAttribute("competition", competitionService.findById(compId));
         model.addAttribute("event", eventService.findById(eventId));
         model.addAttribute("round", round);
+        boolean isFinal = "결승".equals(round.getRound()) || "조별결승".equals(round.getRound());
+        model.addAttribute("isFinal", isFinal);
         boolean hasResults = eventService.hasResults(roundId);
         model.addAttribute("hasResults", hasResults);
         if (hasResults) {

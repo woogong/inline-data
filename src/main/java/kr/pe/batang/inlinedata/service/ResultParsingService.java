@@ -50,13 +50,14 @@ public class ResultParsingService {
         // 헤더 파싱
         int eventNumber = 0;
         int heatNumber = 0;
+        boolean isTeamEvent = false;
         for (String line : lines) {
             String trimmed = line.trim();
-            // 헤더: "114-1 남자고등부 1,000m 예선1조" — eventNumber 뒤에 여/남 부별명
             Matcher headerMatch = Pattern.compile("^(\\d+)(?:-(\\d+))?\\s+(여|남).+").matcher(trimmed);
             if (headerMatch.matches()) {
                 eventNumber = Integer.parseInt(headerMatch.group(1));
                 heatNumber = headerMatch.group(2) != null ? Integer.parseInt(headerMatch.group(2)) : 0;
+                isTeamEvent = trimmed.contains("계주") || trimmed.contains("팀DTT") || trimmed.contains("팀dtt");
                 break;
             }
         }
@@ -83,8 +84,8 @@ public class ResultParsingService {
         Map<Integer, HeatEntry> entryByBib = existingEntries.stream()
                 .collect(Collectors.toMap(HeatEntry::getBibNumber, e -> e, (a, b) -> a));
 
-        // 결과 파싱
-        List<ParsedResult> results = parseResultLines(lines);
+        // 결과 파싱 (개인전/단체전 분기)
+        List<ParsedResult> results = isTeamEvent ? parseTeamResultLines(lines) : parseResultLines(lines);
 
         int resultCount = 0;
         int newEntryCount = 0;
@@ -240,6 +241,66 @@ public class ResultParsingService {
                 }
 
                 results.add(new ParsedResult(bib, athleteName, region, teamName, ranking, record, newRecord, qualification, note));
+            }
+        }
+        return results;
+    }
+
+    /**
+     * 단체전(계주/팀DTT) 결과 파싱.
+     * 형식: "순위  레인 팀명  시도  신기록  진출여부  기록  사유"
+     * 다음 줄에 멤버: "(이름,이름,이름)"
+     */
+    private List<ParsedResult> parseTeamResultLines(String[] lines) {
+        List<ParsedResult> results = new ArrayList<>();
+        boolean inData = false;
+        for (int i = 0; i < lines.length; i++) {
+            String trimmed = lines[i].trim();
+            if (trimmed.startsWith("순위")) { inData = true; continue; }
+            if (!inData) continue;
+            if (trimmed.isEmpty()) continue;
+            if (trimmed.startsWith("기록확인") || trimmed.startsWith("심판") || trimmed.startsWith("경기부장")
+                    || trimmed.startsWith("대한롤러") || trimmed.matches("^\\d{4}\\..*") || trimmed.startsWith("(")) continue;
+
+            // 단체전 결과행: "1    3   대구성산중학교         대구          Q     4:55.912"
+            // 또는 DQ 등: "DQ   1   팀명  시도  ...  사유"
+            Matcher m = Pattern.compile("^(\\d+|EL|DQ|DNF|DNS|DSQ|DF)\\s+(\\d+)\\s+(.+)$").matcher(trimmed);
+            if (m.matches()) {
+                String rankStr = m.group(1);
+                int lane = Integer.parseInt(m.group(2)); // 레인 = 배번
+                String rest = m.group(3).trim();
+
+                Integer ranking = null;
+                try { ranking = Integer.parseInt(rankStr); } catch (NumberFormatException ignored) {}
+
+                // rest: "대구성산중학교         대구          Q     4:55.912"
+                String[] parts = rest.split("\\s{2,}");
+                String teamEntryName = parts.length >= 1 ? parts[0].trim() : null; // 팀명 = athleteName
+                String region = parts.length >= 2 ? parts[1].trim() : null;
+
+                String record = null, newRecord = null, qualification = null, note = null;
+
+                // 전체 rest에서 기록/신기록/진출 추출
+                Matcher rm = Pattern.compile("(\\d+:\\d+\\.\\d+|\\d+\\.\\d{3})").matcher(rest);
+                if (rm.find()) record = rm.group(1);
+                if (rest.contains("세계신")) newRecord = "세계신";
+                else if (rest.contains("한국신")) newRecord = "한국신";
+                else if (rest.contains("부별신")) newRecord = "부별신";
+                else if (rest.contains("대회신")) newRecord = "대회신";
+                if (rest.contains("Q")) qualification = "Q";
+
+                Matcher nm = Pattern.compile("(제외|실격|점수줌|낙차|경고|주의)").matcher(rest);
+                if (nm.find()) note = nm.group(1);
+                if (ranking == null) {
+                    String sn = switch (rankStr) {
+                        case "EL" -> "제외"; case "DF", "DQ", "DSQ" -> "실격";
+                        case "DNF" -> "미완주"; case "DNS" -> "미출전"; default -> rankStr;
+                    };
+                    note = note != null ? note + " " + sn : sn;
+                }
+
+                // 단체전: athleteName=팀명, teamName=팀명
+                results.add(new ParsedResult(lane, teamEntryName, region, teamEntryName, ranking, record, newRecord, qualification, note));
             }
         }
         return results;

@@ -49,6 +49,9 @@
                         <th>부별</th>
                         <th>종목</th>
                         <th>성별</th>
+                        <th style="text-align:center">금</th>
+                        <th style="text-align:center">은</th>
+                        <th style="text-align:center">동</th>
                     </tr>
                 </thead>
                 <tbody id="eventBody">
@@ -57,6 +60,11 @@
                         <td><a th:href="@{/competitions/{compId}/events/{eventId}(compId=${competition.id}, eventId=${e.id})}"
                                th:text="${e.eventName}"></a></td>
                         <td th:text="${e.gender == 'M' ? '남' : (e.gender == 'F' ? '여' : '혼성')}"></td>
+                        <th:block th:with="m=${medals[e.id]}">
+                            <td th:text="${m?.gold}"></td>
+                            <td th:text="${m?.silver}"></td>
+                            <td th:text="${m?.bronze}"></td>
+                        </th:block>
                     </tr>
                 </tbody>
             </table>

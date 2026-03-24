@@ -21,8 +21,10 @@
         th { background: #f5f5f5; font-weight: 600; }
         tr:hover { background: #fafafa; }
         .rank-1 { background: #fff9e6; }
-        .rank-2 { background: #f5f5f5; }
+        .rank-2 { background: #f0f0f0; }
         .rank-3 { background: #fef0e7; }
+        .qualified { background: #e8f5e9; }
+        .not-qualified { background: #fafafa; }
         .q-mark { color: #27ae60; font-weight: 700; }
         .new-record { font-weight: 600; font-size: 0.85rem; }
         .new-record.nr-competition { color: #e74c3c; }
@@ -53,11 +55,17 @@
                 <table>
                     <thead><tr><th style="width:50px">순위</th><th style="width:60px">배번</th><th>선수명</th><th>소속</th><th>기록</th><th style="width:60px">진출</th><th>비고</th></tr></thead>
                     <tbody>
-                        <tr th:each="er : ${heatEntry.value}" th:classappend="${er.ranking == 1 ? 'rank-1' : (er.ranking == 2 ? 'rank-2' : (er.ranking == 3 ? 'rank-3' : ''))}">
+                        <tr th:each="er : ${heatEntry.value}"
+                            th:classappend="${isFinal
+                                ? (er.ranking == 1 ? 'rank-1' : (er.ranking == 2 ? 'rank-2' : (er.ranking == 3 ? 'rank-3' : '')))
+                                : (er.qualification != null ? 'qualified' : 'not-qualified')}">
                             <td th:text="${er.ranking}"></td>
                             <td th:text="${er.heatEntry.bibNumber}"></td>
                             <td th:text="${er.heatEntry.entry.athleteName}"></td>
-                            <td><span th:if="${er.heatEntry.entry.region != null}" th:text="${er.heatEntry.entry.region} + ' ' + ${er.heatEntry.entry.teamName}"></span></td>
+                            <td>
+                                <span th:if="${er.heatEntry.entry.region != null}" th:text="${er.heatEntry.entry.region} + ' ' + ${er.heatEntry.entry.teamName}"></span>
+                                <span th:if="${er.heatEntry.entry.grade != null}" th:text="${er.heatEntry.entry.grade}" style="color:#888; font-size:0.85rem;"></span>
+                            </td>
                             <td><span th:text="${er.record}"></span>
                                 <span th:if="${er.newRecord != null}" class="new-record"
                                       th:classappend="${er.newRecord == '대회신' ? 'nr-competition' : (er.newRecord == '부별신' ? 'nr-division' : (er.newRecord == '한국신' ? 'nr-korea' : (er.newRecord == '세계신' ? 'nr-world' : '')))}"
