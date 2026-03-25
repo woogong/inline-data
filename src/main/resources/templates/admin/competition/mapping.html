@@ -328,10 +328,27 @@
                         const li = document.createElement('li');
                         li.className = 'candidate-item'; li.dataset.athleteId = c.athleteId;
                         li.onclick = function() { document.querySelectorAll('#candidateList .candidate-item').forEach(el => el.classList.remove('selected')); li.classList.add('selected'); selectedAthleteId = c.athleteId; };
-                        let hist = c.history && c.history.length > 0
-                            ? '<div class="candidate-history">이력:<ul>' + c.history.map(h => '<li>' + h.competitionName + (h.teamName ? ' / ' + h.teamName : '') + (h.region ? ' (' + h.region + ')' : '') + '</li>').join('') + '</ul></div>'
-                            : '<div class="candidate-history">이력 없음</div>';
-                        li.innerHTML = '<div class="candidate-info">' + c.name + ' (' + (c.gender === 'M' ? '남' : '여') + ')' + (c.birthYear ? ' / ' + c.birthYear + '년생' : '') + ' [ID:' + c.athleteId + ']' + '</div>' + hist;
+
+                        const infoDiv = document.createElement('div');
+                        infoDiv.className = 'candidate-info';
+                        infoDiv.textContent = c.name + ' (' + (c.gender === 'M' ? '남' : '여') + ')' + (c.birthYear ? ' / ' + c.birthYear + '년생' : '') + ' [ID:' + c.athleteId + ']';
+                        li.appendChild(infoDiv);
+
+                        const histDiv = document.createElement('div');
+                        histDiv.className = 'candidate-history';
+                        if (c.history && c.history.length > 0) {
+                            histDiv.textContent = '이력:';
+                            const ul = document.createElement('ul');
+                            c.history.forEach(h => {
+                                const hli = document.createElement('li');
+                                hli.textContent = h.competitionName + (h.teamName ? ' / ' + h.teamName : '') + (h.region ? ' (' + h.region + ')' : '');
+                                ul.appendChild(hli);
+                            });
+                            histDiv.appendChild(ul);
+                        } else {
+                            histDiv.textContent = '이력 없음';
+                        }
+                        li.appendChild(histDiv);
                         list.appendChild(li);
                     });
                     if (candidates.length === 1) list.querySelector('.candidate-item').click();
@@ -402,7 +419,10 @@
                         const li = document.createElement('li');
                         li.className = 'candidate-item'; li.dataset.teamId = c.teamId;
                         li.onclick = function() { document.querySelectorAll('#teamCandidateList .candidate-item').forEach(el => el.classList.remove('selected')); li.classList.add('selected'); selectedTeamId = c.teamId; };
-                        li.innerHTML = '<div class="candidate-info">' + c.name + ' (' + c.region + ') [ID:' + c.teamId + ']</div>';
+                        const tInfoDiv = document.createElement('div');
+                        tInfoDiv.className = 'candidate-info';
+                        tInfoDiv.textContent = c.name + ' (' + c.region + ') [ID:' + c.teamId + ']';
+                        li.appendChild(tInfoDiv);
                         list.appendChild(li);
                     });
                     if (candidates.length === 1) list.querySelector('.candidate-item').click();

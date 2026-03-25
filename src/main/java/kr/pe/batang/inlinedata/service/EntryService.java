@@ -8,6 +8,7 @@ import kr.pe.batang.inlinedata.entity.EventRound;
 import kr.pe.batang.inlinedata.entity.HeatEntry;
 import kr.pe.batang.inlinedata.repository.CompetitionEntryRepository;
 import kr.pe.batang.inlinedata.repository.EventHeatRepository;
+import kr.pe.batang.inlinedata.repository.EventResultRepository;
 import kr.pe.batang.inlinedata.repository.HeatEntryRepository;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
@@ -24,6 +25,7 @@ public class EntryService {
     private final CompetitionEntryRepository competitionEntryRepository;
     private final EventHeatRepository eventHeatRepository;
     private final HeatEntryRepository heatEntryRepository;
+    private final EventResultRepository eventResultRepository;
 
     @Transactional
     public Long addHeat(EventRound round, int heatNumber) {
@@ -38,6 +40,9 @@ public class EntryService {
     @Transactional
     public void deleteHeat(Long heatId) {
         List<HeatEntry> entries = heatEntryRepository.findByHeatIdOrderByBibNumberAsc(heatId);
+        for (HeatEntry he : entries) {
+            eventResultRepository.findByHeatEntryId(he.getId()).ifPresent(eventResultRepository::delete);
+        }
         heatEntryRepository.deleteAll(entries);
         eventHeatRepository.deleteById(heatId);
     }
@@ -74,6 +79,7 @@ public class EntryService {
 
     @Transactional
     public void deleteEntry(Long heatEntryId) {
+        eventResultRepository.findByHeatEntryId(heatEntryId).ifPresent(eventResultRepository::delete);
         heatEntryRepository.deleteById(heatEntryId);
     }
 }

@@ -2,7 +2,13 @@ package kr.pe.batang.inlinedata.service;
 
 import kr.pe.batang.inlinedata.controller.dto.CompetitionFormDto;
 import kr.pe.batang.inlinedata.entity.Competition;
+import kr.pe.batang.inlinedata.repository.CompetitionEntryRepository;
 import kr.pe.batang.inlinedata.repository.CompetitionRepository;
+import kr.pe.batang.inlinedata.repository.EventHeatRepository;
+import kr.pe.batang.inlinedata.repository.EventRepository;
+import kr.pe.batang.inlinedata.repository.EventResultRepository;
+import kr.pe.batang.inlinedata.repository.EventRoundRepository;
+import kr.pe.batang.inlinedata.repository.HeatEntryRepository;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -26,8 +32,13 @@ class CompetitionServiceTest {
     @InjectMocks
     private CompetitionService competitionService;
 
-    @Mock
-    private CompetitionRepository competitionRepository;
+    @Mock private CompetitionRepository competitionRepository;
+    @Mock private EventRepository eventRepository;
+    @Mock private EventRoundRepository eventRoundRepository;
+    @Mock private EventHeatRepository eventHeatRepository;
+    @Mock private HeatEntryRepository heatEntryRepository;
+    @Mock private EventResultRepository eventResultRepository;
+    @Mock private CompetitionEntryRepository competitionEntryRepository;
 
     private CompetitionFormDto createDto() {
         CompetitionFormDto dto = new CompetitionFormDto();
@@ -116,6 +127,8 @@ class CompetitionServiceTest {
     void delete() {
         Competition competition = createCompetition();
         given(competitionRepository.findById(1L)).willReturn(Optional.of(competition));
+        given(eventRepository.findByCompetitionIdOrderByFirstEventNumber(1L)).willReturn(List.of());
+        given(competitionEntryRepository.findByCompetitionId(1L)).willReturn(List.of());
 
         competitionService.delete(1L);
 

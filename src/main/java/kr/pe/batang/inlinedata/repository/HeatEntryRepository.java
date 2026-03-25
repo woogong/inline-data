@@ -11,6 +11,8 @@ public interface HeatEntryRepository extends JpaRepository<HeatEntry, Long> {
 
     List<HeatEntry> findByHeatIdOrderByBibNumberAsc(Long heatId);
 
+    long countByHeatIdIn(List<Long> heatIds);
+
     List<HeatEntry> findByEntryId(Long entryId);
 
     @Query("SELECT he FROM HeatEntry he " +

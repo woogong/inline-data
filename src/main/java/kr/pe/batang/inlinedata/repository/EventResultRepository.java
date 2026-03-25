@@ -12,6 +12,9 @@ public interface EventResultRepository extends JpaRepository<EventResult, Long> 
 
     Optional<EventResult> findByHeatEntryId(Long heatEntryId);
 
+    @Query("SELECT COUNT(er) FROM EventResult er WHERE er.heatEntry.heat.id IN :heatIds")
+    long countByHeatIds(@Param("heatIds") List<Long> heatIds);
+
     @Query("SELECT er FROM EventResult er " +
            "JOIN FETCH er.heatEntry he " +
            "JOIN FETCH he.entry ce " +
@@ -20,4 +23,16 @@ public interface EventResultRepository extends JpaRepository<EventResult, Long> 
            "WHERE he.heat.id IN :heatIds " +
            "ORDER BY he.heat.id, er.ranking ASC NULLS LAST")
     List<EventResult> findByHeatIdsWithDetails(@Param("heatIds") List<Long> heatIds);
+
+    @Query("SELECT er FROM EventResult er " +
+           "JOIN FETCH er.heatEntry he " +
+           "JOIN FETCH he.entry ce " +
+           "JOIN he.heat eh " +
+           "JOIN eh.eventRound r " +
+           "JOIN r.event e " +
+           "WHERE e.competition.id = :compId " +
+           "AND (r.round = '결승' OR r.round = '조별결승') " +
+           "AND er.ranking IN (1, 2, 3) " +
+           "ORDER BY e.id, er.ranking")
+    List<EventResult> findMedalResultsByCompetitionId(@Param("compId") Long competitionId);
 }

@@ -1,11 +1,13 @@
 package kr.pe.batang.inlinedata.service;
 
+import kr.pe.batang.inlinedata.entity.Competition;
 import kr.pe.batang.inlinedata.entity.CompetitionEntry;
 import kr.pe.batang.inlinedata.entity.EventHeat;
 import kr.pe.batang.inlinedata.entity.EventResult;
 import kr.pe.batang.inlinedata.entity.EventRound;
 import kr.pe.batang.inlinedata.entity.HeatEntry;
 import kr.pe.batang.inlinedata.repository.CompetitionEntryRepository;
+import kr.pe.batang.inlinedata.repository.CompetitionRepository;
 import kr.pe.batang.inlinedata.repository.EventHeatRepository;
 import kr.pe.batang.inlinedata.repository.EventResultRepository;
 import kr.pe.batang.inlinedata.repository.EventRoundRepository;
@@ -15,9 +17,7 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
-import java.io.BufferedReader;
 import java.io.IOException;
-import java.io.InputStreamReader;
 import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.List;
@@ -32,17 +32,19 @@ import java.util.stream.Collectors;
 @RequiredArgsConstructor
 public class ResultParsingService {
 
+    private final CompetitionRepository competitionRepository;
     private final EventRoundRepository eventRoundRepository;
     private final EventHeatRepository eventHeatRepository;
     private final HeatEntryRepository heatEntryRepository;
     private final EventResultRepository eventResultRepository;
     private final CompetitionEntryRepository competitionEntryRepository;
+    private final PdfTextExtractor pdfTextExtractor;
 
     public record ImportResult(int results, int newEntries, int filesProcessed) {}
 
     @Transactional
     public ImportResult parseResultPdf(Path pdfPath, Long competitionId) throws IOException {
-        String text = extractText(pdfPath);
+        String text = pdfTextExtractor.extractText(pdfPath);
         if (text == null || text.isBlank()) return new ImportResult(0, 0, 0);
 
         String[] lines = text.split("\n");
@@ -142,9 +144,13 @@ public class ResultParsingService {
                                                           String gender, String region, String teamName) {
         return competitionEntryRepository
                 .findByCompetitionIdAndAthleteNameAndGenderAndTeamName(competitionId, athleteName, gender, teamName != null ? teamName : "")
-                .orElseGet(() -> competitionEntryRepository.save(CompetitionEntry.builder()
-                        .competition(competitionEntryRepository.findByCompetitionId(competitionId).getFirst().getCompetition())
-                        .athleteName(athleteName).gender(gender).region(region).teamName(teamName).build()));
+                .orElseGet(() -> {
+                    Competition competition = competitionRepository.findById(competitionId)
+                            .orElseThrow(() -> new IllegalArgumentException("대회를 찾을 수 없습니다. id=" + competitionId));
+                    return competitionEntryRepository.save(CompetitionEntry.builder()
+                            .competition(competition)
+                            .athleteName(athleteName).gender(gender).region(region).teamName(teamName).build());
+                });
     }
 
     private static final Pattern RECORD_ONLY_LINE = Pattern.compile(
@@ -304,26 +310,6 @@ public class ResultParsingService {
             }
         }
         return results;
-    }
-
-    private String extractText(Path pdfPath) throws IOException {
-        ProcessBuilder pb = new ProcessBuilder("pdftotext", "-layout", pdfPath.toString(), "-");
-        pb.redirectErrorStream(true);
-        Process process = pb.start();
-        try {
-            String text = new String(process.getInputStream().readAllBytes());
-            boolean finished = process.waitFor(30, java.util.concurrent.TimeUnit.SECONDS);
-            if (!finished) {
-                process.destroyForcibly();
-                log.warn("pdftotext timed out for {}", pdfPath.getFileName());
-                return null;
-            }
-            return text;
-        } catch (InterruptedException e) {
-            process.destroyForcibly();
-            Thread.currentThread().interrupt();
-            return null;
-        }
     }
 
     private record ParsedResult(int bibNumber, String athleteName, String region, String teamName,
