@@ -33,11 +33,12 @@ public class EntryImportService {
     private final CompetitionEntryRepository competitionEntryRepository;
     private final PdfTextExtractor pdfTextExtractor;
 
+    // "67 여초부 일반(B조) 1,2학년 300m 조별결승" or "1 여초부 5,6학년 500m+D 예선"
     private static final Pattern EVENT_HEADER = Pattern.compile(
-            "^\\s*(\\d+)\\s+(여|남)(\\S+부(?:\\s*\\S+)?(?:\\s*일반\\(B조\\))?)\\s+(\\S+)\\s+(예선|준준결승|준결승|결승|조별결승)\\s*$"
+            "^\\s*(\\d+)\\s+(여|남)(.+?)\\s+(\\S+)\\s+(예선|준준결승|준결승|결승|조별결승)\\s*$"
     );
     private static final Pattern EVENT_HEADER_NO_ROUND = Pattern.compile(
-            "^\\s*(\\d+)\\s+(여|남)(\\S+부(?:\\s*\\S+)?(?:\\s*일반\\(B조\\))?)\\s+(\\S+)\\s*$"
+            "^\\s*(\\d+)\\s+(여|남)(\\S+부.*)\\s+(\\S+m\\S*)\\s*$"
     );
     private static final Pattern HEAT_HEADER = Pattern.compile("^\\s*<\\s*(\\d+)조\\s*>\\s*$");
     private static final Pattern HEAT_FINAL = Pattern.compile("^\\s*<\\s*결승\\s*>\\s*$");
