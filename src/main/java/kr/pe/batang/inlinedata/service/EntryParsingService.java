@@ -7,9 +7,7 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
-import java.io.BufferedReader;
 import java.io.IOException;
-import java.io.InputStreamReader;
 import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.List;
@@ -22,6 +20,7 @@ import java.util.regex.Pattern;
 public class EntryParsingService {
 
     private final AthleteRepository athleteRepository;
+    private final PdfTextExtractor pdfTextExtractor;
 
     // 종목 헤더: "1 여초부 5,6학년 500m+D 예선" 등
     private static final Pattern EVENT_HEADER_PATTERN = Pattern.compile(
@@ -40,7 +39,7 @@ public class EntryParsingService {
 
     @Transactional
     public ImportResult parseEntryPdf(Path pdfPath) throws IOException {
-        String text = extractText(pdfPath);
+        String text = pdfTextExtractor.extractText(pdfPath);
         if (text == null || text.isBlank()) {
             return new ImportResult(0, 0);
         }
@@ -108,25 +107,6 @@ public class EntryParsingService {
         return athletes.stream()
                 .distinct()
                 .toList();
-    }
-
-    private String extractText(Path pdfPath) throws IOException {
-        ProcessBuilder pb = new ProcessBuilder("pdftotext", "-layout", pdfPath.toString(), "-");
-        pb.redirectErrorStream(true);
-        Process process = pb.start();
-        try {
-            String text = new String(process.getInputStream().readAllBytes());
-            boolean finished = process.waitFor(30, java.util.concurrent.TimeUnit.SECONDS);
-            if (!finished) {
-                process.destroyForcibly();
-                return null;
-            }
-            return text;
-        } catch (InterruptedException e) {
-            process.destroyForcibly();
-            Thread.currentThread().interrupt();
-            return null;
-        }
     }
 
     record ParsedAthlete(String name, String gender, String notes) {}

@@ -16,9 +16,7 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
-import java.io.BufferedReader;
 import java.io.IOException;
-import java.io.InputStreamReader;
 import java.nio.file.Path;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
@@ -33,6 +31,7 @@ public class EntryImportService {
     private final EventHeatRepository eventHeatRepository;
     private final HeatEntryRepository heatEntryRepository;
     private final CompetitionEntryRepository competitionEntryRepository;
+    private final PdfTextExtractor pdfTextExtractor;
 
     private static final Pattern EVENT_HEADER = Pattern.compile(
             "^\\s*(\\d+)\\s+(여|남)(\\S+부(?:\\s*\\S+)?(?:\\s*일반\\(B조\\))?)\\s+(\\S+)\\s+(예선|준준결승|준결승|결승|조별결승)\\s*$"
@@ -50,7 +49,7 @@ public class EntryImportService {
 
     @Transactional
     public ImportResult importEntryPdf(Path pdfPath, Competition competition) throws IOException {
-        String text = extractText(pdfPath);
+        String text = pdfTextExtractor.extractText(pdfPath);
         if (text == null || text.isBlank()) return new ImportResult(0, 0, 0, 0);
 
         String[] lines = text.split("\n");
@@ -84,7 +83,10 @@ public class EntryImportService {
                 String round = eventMatch.group(5);
                 isTeamEvent = TEAM_EVENT.matcher(eventName).matches();
 
+                boolean eventExisted = eventRepository.findByCompetitionIdAndDivisionNameAndGenderAndEventName(
+                        competition.getId(), divisionName, currentGender, eventName).isPresent();
                 currentEvent = findOrCreateEvent(competition, divisionName, currentGender, eventName, isTeamEvent);
+                if (!eventExisted) eventCount++;
                 currentRound = findOrCreateRound(currentEvent, round, eventNumber, currentDay);
                 roundCount++;
                 currentHeat = null;
@@ -100,7 +102,10 @@ public class EntryImportService {
                 String eventName = noRoundMatch.group(4);
                 isTeamEvent = TEAM_EVENT.matcher(eventName).matches();
 
+                boolean eventExisted2 = eventRepository.findByCompetitionIdAndDivisionNameAndGenderAndEventName(
+                        competition.getId(), divisionName, currentGender, eventName).isPresent();
                 currentEvent = findOrCreateEvent(competition, divisionName, currentGender, eventName, isTeamEvent);
+                if (!eventExisted2) eventCount++;
                 currentRound = findOrCreateRound(currentEvent, "결승", eventNumber, currentDay);
                 roundCount++;
                 currentHeat = null;
@@ -235,25 +240,6 @@ public class EntryImportService {
                         .teamName(teamName)
                         .grade(grade)
                         .build()));
-    }
-
-    private String extractText(Path pdfPath) throws IOException {
-        ProcessBuilder pb = new ProcessBuilder("pdftotext", "-layout", pdfPath.toString(), "-");
-        pb.redirectErrorStream(true);
-        Process process = pb.start();
-        try {
-            String text = new String(process.getInputStream().readAllBytes());
-            boolean finished = process.waitFor(30, java.util.concurrent.TimeUnit.SECONDS);
-            if (!finished) {
-                process.destroyForcibly();
-                return null;
-            }
-            return text;
-        } catch (InterruptedException e) {
-            process.destroyForcibly();
-            Thread.currentThread().interrupt();
-            return null;
-        }
     }
 
     public record ImportResult(int events, int rounds, int heats, int entries) {}

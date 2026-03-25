@@ -45,31 +45,22 @@ public class EventService {
     }
 
     public Map<Long, MedalInfo> findMedalsByCompetitionId(Long competitionId) {
-        List<Event> events = findByCompetitionId(competitionId);
+        List<EventResult> medalResults = eventResultRepository.findMedalResultsByCompetitionId(competitionId);
+
         Map<Long, MedalInfo> medals = new LinkedHashMap<>();
+        // eventId → ranking → name
+        Map<Long, Map<Integer, String>> byEvent = new LinkedHashMap<>();
+        for (EventResult er : medalResults) {
+            Long eventId = er.getHeatEntry().getHeat().getEventRound().getEvent().getId();
+            byEvent.computeIfAbsent(eventId, k -> new LinkedHashMap<>())
+                    .putIfAbsent(er.getRanking(), er.getHeatEntry().getEntry().getAthleteName());
+        }
+
+        List<Event> events = findByCompetitionId(competitionId);
         for (Event event : events) {
-            // 결승 라운드 찾기
-            List<EventRound> rounds = eventRoundRepository.findByEventIdOrderByEventNumberAsc(event.getId());
-            EventRound finalRound = rounds.stream()
-                    .filter(r -> "결승".equals(r.getRound()) || "조별결승".equals(r.getRound()))
-                    .findFirst().orElse(null);
-            if (finalRound == null) { medals.put(event.getId(), new MedalInfo(null, null, null)); continue; }
-
-            List<EventHeat> heats = eventHeatRepository.findByEventRoundIdOrderByHeatNumberAsc(finalRound.getId());
-            if (heats.isEmpty()) { medals.put(event.getId(), new MedalInfo(null, null, null)); continue; }
-
-            List<Long> heatIds = heats.stream().map(EventHeat::getId).toList();
-            List<EventResult> results = eventResultRepository.findByHeatIdsWithDetails(heatIds);
-
-            String gold = null, silver = null, bronze = null;
-            for (EventResult er : results) {
-                if (er.getRanking() == null) continue;
-                String name = er.getHeatEntry().getEntry().getAthleteName();
-                if (er.getRanking() == 1) gold = name;
-                else if (er.getRanking() == 2) silver = name;
-                else if (er.getRanking() == 3) bronze = name;
-            }
-            medals.put(event.getId(), new MedalInfo(gold, silver, bronze));
+            Map<Integer, String> m = byEvent.get(event.getId());
+            if (m == null) { medals.put(event.getId(), new MedalInfo(null, null, null)); continue; }
+            medals.put(event.getId(), new MedalInfo(m.get(1), m.get(2), m.get(3)));
         }
         return medals;
     }
@@ -95,6 +86,19 @@ public class EventService {
     @Transactional
     public void delete(Long id) {
         Event event = findById(id);
+        List<EventRound> rounds = eventRoundRepository.findByEventIdOrderByEventNumberAsc(id);
+        for (EventRound round : rounds) {
+            List<EventHeat> heats = eventHeatRepository.findByEventRoundIdOrderByHeatNumberAsc(round.getId());
+            for (EventHeat heat : heats) {
+                List<HeatEntry> heatEntries = heatEntryRepository.findByHeatIdOrderByBibNumberAsc(heat.getId());
+                for (HeatEntry he : heatEntries) {
+                    eventResultRepository.findByHeatEntryId(he.getId()).ifPresent(eventResultRepository::delete);
+                }
+                heatEntryRepository.deleteAll(heatEntries);
+            }
+            eventHeatRepository.deleteAll(heats);
+        }
+        eventRoundRepository.deleteAll(rounds);
         eventRepository.delete(event);
     }
 
@@ -108,13 +112,21 @@ public class EventService {
 
     public List<RoundWithStatus> findRoundsWithStatus(Long eventId) {
         List<EventRound> rounds = eventRoundRepository.findByEventIdOrderByEventNumberAsc(eventId);
+        // 모든 라운드의 heat을 한번에 조회
+        List<EventHeat> allHeats = new java.util.ArrayList<>();
+        for (EventRound r : rounds) {
+            allHeats.addAll(eventHeatRepository.findByEventRoundIdOrderByHeatNumberAsc(r.getId()));
+        }
+        Map<Long, List<EventHeat>> heatsByRound = allHeats.stream()
+                .collect(Collectors.groupingBy(h -> h.getEventRound().getId()));
+
         return rounds.stream().map(r -> {
-            List<EventHeat> heats = eventHeatRepository.findByEventRoundIdOrderByHeatNumberAsc(r.getId());
+            List<EventHeat> heats = heatsByRound.getOrDefault(r.getId(), List.of());
             int entryCount = 0, resultCount = 0;
             if (!heats.isEmpty()) {
                 List<Long> heatIds = heats.stream().map(EventHeat::getId).toList();
-                entryCount = heatEntryRepository.findByHeatIdsWithDetails(heatIds).size();
-                resultCount = eventResultRepository.findByHeatIdsWithDetails(heatIds).size();
+                entryCount = (int) heatEntryRepository.countByHeatIdIn(heatIds);
+                resultCount = (int) eventResultRepository.countByHeatIds(heatIds);
             }
             String status;
             if (resultCount > 0 && resultCount >= entryCount) status = "완료";
