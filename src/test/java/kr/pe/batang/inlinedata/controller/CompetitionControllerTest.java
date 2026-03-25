@@ -2,6 +2,7 @@ package kr.pe.batang.inlinedata.controller;
 
 import kr.pe.batang.inlinedata.entity.Competition;
 import kr.pe.batang.inlinedata.service.CompetitionService;
+import kr.pe.batang.inlinedata.service.EventService;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -24,6 +25,9 @@ class CompetitionControllerTest {
 
     @MockitoBean
     private CompetitionService competitionService;
+
+    @MockitoBean
+    private EventService eventService;
 
     private Competition createCompetition() {
         return Competition.builder()

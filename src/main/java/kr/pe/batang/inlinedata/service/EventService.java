@@ -2,11 +2,13 @@ package kr.pe.batang.inlinedata.service;
 
 import kr.pe.batang.inlinedata.controller.dto.EventFormDto;
 import kr.pe.batang.inlinedata.entity.Competition;
+import kr.pe.batang.inlinedata.entity.CompetitionEntry;
 import kr.pe.batang.inlinedata.entity.Event;
 import kr.pe.batang.inlinedata.entity.EventHeat;
 import kr.pe.batang.inlinedata.entity.EventResult;
 import kr.pe.batang.inlinedata.entity.EventRound;
 import kr.pe.batang.inlinedata.entity.HeatEntry;
+import kr.pe.batang.inlinedata.repository.CompetitionEntryRepository;
 import kr.pe.batang.inlinedata.repository.EventHeatRepository;
 import kr.pe.batang.inlinedata.repository.EventRepository;
 import kr.pe.batang.inlinedata.repository.EventResultRepository;
@@ -18,6 +20,7 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.util.Comparator;
 import java.util.LinkedHashMap;
+import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
@@ -31,6 +34,7 @@ public class EventService {
 
     private final EventRepository eventRepository;
     private final EventRoundRepository eventRoundRepository;
+    private final CompetitionEntryRepository competitionEntryRepository;
     private final EventHeatRepository eventHeatRepository;
     private final HeatEntryRepository heatEntryRepository;
     private final EventResultRepository eventResultRepository;
@@ -39,6 +43,11 @@ public class EventService {
     // --- Event (종목) ---
 
     public record MedalInfo(String gold, String silver, String bronze) {}
+
+    public record DivisionStat(String division, int male, int female, int total) {}
+
+    public record ParticipantStats(int totalMale, int totalFemale, int totalAll,
+                                   List<DivisionStat> divisionStats) {}
 
     public List<Event> findByCompetitionId(Long competitionId) {
         return eventRepository.findByCompetitionIdOrderByFirstEventNumber(competitionId);
@@ -63,6 +72,92 @@ public class EventService {
             medals.put(event.getId(), new MedalInfo(m.get(1), m.get(2), m.get(3)));
         }
         return medals;
+    }
+
+    public ParticipantStats findParticipantStats(Long competitionId) {
+        // 개인전 종목에 출전한 CompetitionEntry 조회 (중복 제거)
+        List<CompetitionEntry> entries = competitionEntryRepository
+                .findIndividualEntriesWithAthlete(competitionId);
+
+        int totalMale = 0, totalFemale = 0;
+        // divisionBase(부별 공통명) → {male, female}
+        Map<String, int[]> divMap = new LinkedHashMap<>();
+
+        for (CompetitionEntry ce : entries) {
+            // 해당 엔트리가 참가한 종목의 division_name을 가져오기 위해 HeatEntry → Event 추적
+            String gender = ce.getGender();
+            boolean isMale = "M".equals(gender);
+            if (isMale) totalMale++; else totalFemale++;
+        }
+
+        // 부별 통계: divisionName에서 성별 제거하여 그룹화
+        // "여초부 5,6학년" → "초부 5,6학년", "남중부" → "중부"
+        List<Event> events = findByCompetitionId(competitionId);
+        Map<Long, Event> eventById = events.stream().collect(Collectors.toMap(Event::getId, e -> e));
+
+        // entry → division 매핑 (HeatEntry를 통해)
+        Map<Long, Set<String>> entryDivisions = new LinkedHashMap<>();
+        for (Event event : events) {
+            if (event.isTeamEvent()) continue;
+            List<EventRound> rounds = eventRoundRepository.findByEventIdOrderByEventNumberAsc(event.getId());
+            for (EventRound round : rounds) {
+                List<EventHeat> heats = eventHeatRepository.findByEventRoundIdOrderByHeatNumberAsc(round.getId());
+                if (heats.isEmpty()) continue;
+                List<Long> heatIds = heats.stream().map(EventHeat::getId).toList();
+                List<HeatEntry> heatEntries = heatEntryRepository.findByHeatIdsWithDetails(heatIds);
+                String divBase = normalizeDivision(event.getDivisionName());
+                for (HeatEntry he : heatEntries) {
+                    entryDivisions.computeIfAbsent(he.getEntry().getId(), k -> new LinkedHashSet<>()).add(divBase);
+                }
+                break; // 첫 번째 라운드만 확인 (중복 방지)
+            }
+        }
+
+        for (CompetitionEntry ce : entries) {
+            Set<String> divs = entryDivisions.getOrDefault(ce.getId(), Set.of());
+            boolean isMale = "M".equals(ce.getGender());
+            for (String div : divs) {
+                int[] counts = divMap.computeIfAbsent(div, k -> new int[2]);
+                if (isMale) counts[0]++; else counts[1]++;
+            }
+        }
+
+        List<DivisionStat> divisionStats = divMap.entrySet().stream()
+                .map(e -> new DivisionStat(e.getKey(), e.getValue()[0], e.getValue()[1],
+                        e.getValue()[0] + e.getValue()[1]))
+                .sorted(Comparator.comparingInt(d -> divisionOrder(d.division())))
+                .toList();
+
+        return new ParticipantStats(totalMale, totalFemale, totalMale + totalFemale, divisionStats);
+    }
+
+    private static String normalizeDivision(String divisionName) {
+        String base = divisionName.replaceFirst("^[여남]", "");
+        return base.replaceFirst("^초부", "초등부")
+                   .replaceFirst("^중부", "중등부")
+                   .replaceFirst("^고부", "고등부")
+                   .replaceFirst("^대부", "대학부")
+                   .replaceFirst("^일부", "일반부");
+    }
+
+    private static int divisionOrder(String division) {
+        if (division.contains("일반(B조)")) {
+            if (division.contains("1,2학년")) return 14;
+            if (division.contains("3,4학년")) return 15;
+            if (division.contains("5,6학년")) return 16;
+            return 17;
+        }
+        if (division.startsWith("초등부")) {
+            if (division.contains("1,2학년")) return 10;
+            if (division.contains("3,4학년")) return 11;
+            if (division.contains("5,6학년")) return 12;
+            return 13;
+        }
+        if (division.startsWith("중등부")) return 20;
+        if (division.startsWith("고등부")) return 30;
+        if (division.startsWith("대학부")) return 40;
+        if (division.startsWith("일반부")) return 50;
+        return 99;
     }
 
     public Event findById(Long id) {

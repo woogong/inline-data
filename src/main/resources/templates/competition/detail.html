@@ -13,52 +13,175 @@
         nav a:hover { color: #fff; text-decoration: underline; }
         nav .nav-brand { font-weight: bold; font-size: 1.1rem; }
         main { padding: 1.5rem 0; }
-        dl { margin: 1rem 0; }
+        .tab-bar { display: flex; border-bottom: 2px solid #3498db; margin: 1rem 0 0; }
+        .tab-bar a { padding: 0.6rem 1.5rem; text-decoration: none; font-weight: 600; color: #555; border: 1px solid #ddd; border-bottom: none; border-radius: 4px 4px 0 0; margin-right: 2px; background: #f5f5f5; }
+        .tab-bar a:hover { background: #e8e8e8; }
+        .tab-bar a.active { background: #3498db; color: #fff; border-color: #3498db; }
+        .tab-content { padding: 1rem 0; }
+        dl { margin: 0.5rem 0; }
         dt { font-weight: 600; color: #555; margin-top: 0.8rem; }
         dd { margin-left: 0; padding: 0.3rem 0; }
+        table { width: 100%; border-collapse: collapse; margin: 1rem 0; }
+        th, td { padding: 0.5rem 0.8rem; border: 1px solid #ddd; text-align: left; }
+        th { background: #f5f5f5; font-weight: 600; }
+        tr:hover { background: #fafafa; }
+        a { color: #3498db; }
         .btn { display: inline-block; padding: 0.4rem 1rem; border: none; border-radius: 4px; cursor: pointer; text-decoration: none; font-size: 0.9rem; }
         .btn-secondary { background: #95a5a6; color: #fff; }
         .btn-secondary:hover { background: #7f8c8d; }
         .actions { margin-top: 1.5rem; }
+        .filters { display: flex; gap: 0.5rem; align-items: center; margin: 0.5rem 0; }
+        .filters select { padding: 0.3rem 0.5rem; border: 1px solid #ccc; border-radius: 4px; font-size: 0.9rem; }
+        .filters label { font-weight: 600; font-size: 0.9rem; }
+        .empty { text-align: center; color: #999; padding: 2rem; }
     </style>
 </head>
 <body>
     <div th:replace="~{fragments/header :: header}"></div>
     <main class="container">
         <h1 th:text="${competition.name}">대회명</h1>
-        <dl>
-            <th:block th:if="${competition.startDate != null}">
-                <dt>대회기간</dt>
-                <dd>
-                    <span th:text="${competition.startDate}"></span>
-                    <span th:if="${competition.endDate != null}" th:text="' ~ ' + ${competition.endDate}"></span>
-                    <span th:if="${competition.durationDays != null}" th:text="'(' + ${competition.durationDays} + '일간)'"></span>
-                </dd>
-            </th:block>
-            <th:block th:if="${competition.venue != null}">
-                <dt>대회장소</dt>
-                <dd th:text="${competition.venue}"></dd>
-            </th:block>
-            <th:block th:if="${competition.venueDetail != null}">
-                <dt>경기장 상세</dt>
-                <dd th:text="${competition.venueDetail}"></dd>
-            </th:block>
-            <th:block th:if="${competition.host != null}">
-                <dt>주최</dt>
-                <dd th:text="${competition.host}"></dd>
-            </th:block>
-            <th:block th:if="${competition.organizer != null}">
-                <dt>주관</dt>
-                <dd th:text="${competition.organizer}"></dd>
-            </th:block>
-            <th:block th:if="${competition.notes != null and !competition.notes.isEmpty()}">
-                <dt>비고</dt>
-                <dd th:text="${competition.notes}"></dd>
-            </th:block>
-        </dl>
+
+        <div class="tab-bar">
+            <a th:href="@{/competitions/{id}(id=${competition.id}, tab='overview')}"
+               th:classappend="${tab == 'overview'} ? 'active'">대회 개요</a>
+            <a th:href="@{/competitions/{id}(id=${competition.id}, tab='events')}"
+               th:classappend="${tab == 'events'} ? 'active'">종목</a>
+            <a th:href="@{/competitions/{id}(id=${competition.id}, tab='stats')}"
+               th:classappend="${tab == 'stats'} ? 'active'">참가 선수 통계</a>
+        </div>
+
+        <!-- 대회 개요 탭 -->
+        <div class="tab-content" th:if="${tab == 'overview'}">
+            <dl>
+                <th:block th:if="${competition.startDate != null}">
+                    <dt>대회기간</dt>
+                    <dd>
+                        <span th:text="${competition.startDate}"></span>
+                        <span th:if="${competition.endDate != null}" th:text="' ~ ' + ${competition.endDate}"></span>
+                        <span th:if="${competition.durationDays != null}" th:text="'(' + ${competition.durationDays} + '일간)'"></span>
+                    </dd>
+                </th:block>
+                <th:block th:if="${competition.venue != null}">
+                    <dt>대회장소</dt>
+                    <dd th:text="${competition.venue}"></dd>
+                </th:block>
+                <th:block th:if="${competition.venueDetail != null}">
+                    <dt>경기장 상세</dt>
+                    <dd th:text="${competition.venueDetail}"></dd>
+                </th:block>
+                <th:block th:if="${competition.host != null}">
+                    <dt>주최</dt>
+                    <dd th:text="${competition.host}"></dd>
+                </th:block>
+                <th:block th:if="${competition.organizer != null}">
+                    <dt>주관</dt>
+                    <dd th:text="${competition.organizer}"></dd>
+                </th:block>
+                <th:block th:if="${competition.notes != null and !competition.notes.isEmpty()}">
+                    <dt>비고</dt>
+                    <dd th:text="${competition.notes}"></dd>
+                </th:block>
+            </dl>
+        </div>
+
+        <!-- 종목 탭 -->
+        <div class="tab-content" th:if="${tab == 'events'}">
+            <div th:if="${events.isEmpty()}" class="empty">등록된 종목이 없습니다.</div>
+
+            <div th:if="${!events.isEmpty()}">
+                <div class="filters">
+                    <label>부별</label>
+                    <select id="filterDivision"><option value="">전체</option></select>
+                    <label style="margin-left:0.5rem;">종목</label>
+                    <select id="filterEventName"><option value="">전체</option></select>
+                </div>
+                <table>
+                    <thead>
+                        <tr>
+                            <th>부별</th>
+                            <th>종목</th>
+                            <th>성별</th>
+                            <th style="text-align:center">금</th>
+                            <th style="text-align:center">은</th>
+                            <th style="text-align:center">동</th>
+                        </tr>
+                    </thead>
+                    <tbody id="eventBody">
+                        <tr th:each="e : ${events}" th:attr="data-division=${e.divisionName},data-event-name=${e.eventName}">
+                            <td th:text="${e.divisionName}"></td>
+                            <td><a th:href="@{/competitions/{compId}/events/{eventId}(compId=${competition.id}, eventId=${e.id})}"
+                                   th:text="${e.eventName}"></a></td>
+                            <td th:text="${e.gender == 'M' ? '남' : (e.gender == 'F' ? '여' : '혼성')}"></td>
+                            <th:block th:with="m=${medals[e.id]}">
+                                <td th:text="${m?.gold}"></td>
+                                <td th:text="${m?.silver}"></td>
+                                <td th:text="${m?.bronze}"></td>
+                            </th:block>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
+        </div>
+
+        <!-- 참가 선수 통계 탭 -->
+        <div class="tab-content" th:if="${tab == 'stats'}">
+            <h2>전체 참가 선수</h2>
+            <table style="width:auto; margin:0.5rem 0 1.5rem;">
+                <thead>
+                    <tr><th>남</th><th>여</th><th>합계</th></tr>
+                </thead>
+                <tbody>
+                    <tr>
+                        <td th:text="${stats.totalMale} + '명'"></td>
+                        <td th:text="${stats.totalFemale} + '명'"></td>
+                        <td style="font-weight:600;" th:text="${stats.totalAll} + '명'"></td>
+                    </tr>
+                </tbody>
+            </table>
+
+            <h2>부별 참가 선수</h2>
+            <table>
+                <thead>
+                    <tr><th>부별</th><th style="text-align:center">남</th><th style="text-align:center">여</th><th style="text-align:center">합계</th></tr>
+                </thead>
+                <tbody>
+                    <tr th:each="d : ${stats.divisionStats}">
+                        <td th:text="${d.division}"></td>
+                        <td style="text-align:center" th:text="${d.male > 0 ? d.male : ''}"></td>
+                        <td style="text-align:center" th:text="${d.female > 0 ? d.female : ''}"></td>
+                        <td style="text-align:center; font-weight:600;" th:text="${d.total}"></td>
+                    </tr>
+                    <tr th:if="${stats.divisionStats.isEmpty()}">
+                        <td colspan="4" style="text-align:center; color:#999;">통계 데이터가 없습니다.</td>
+                    </tr>
+                </tbody>
+            </table>
+        </div>
+
         <div class="actions">
             <a th:href="@{/competitions}" class="btn btn-secondary">목록으로</a>
         </div>
     </main>
+
+    <script th:if="${tab == 'events'}">
+        const rows = document.querySelectorAll('#eventBody tr');
+        const filterDiv = document.getElementById('filterDivision');
+        const filterEvt = document.getElementById('filterEventName');
+
+        const divisions = new Set();
+        const eventNames = new Set();
+        rows.forEach(r => { divisions.add(r.dataset.division); eventNames.add(r.dataset.eventName); });
+        [...divisions].sort().forEach(d => { const o = document.createElement('option'); o.value = d; o.textContent = d; filterDiv.appendChild(o); });
+        [...eventNames].sort().forEach(e => { const o = document.createElement('option'); o.value = e; o.textContent = e; filterEvt.appendChild(o); });
+
+        function applyFilter() {
+            const d = filterDiv.value, e = filterEvt.value;
+            rows.forEach(r => {
+                r.style.display = (!d || r.dataset.division === d) && (!e || r.dataset.eventName === e) ? '' : 'none';
+            });
+        }
+        filterDiv.addEventListener('change', applyFilter);
+        filterEvt.addEventListener('change', applyFilter);
+    </script>
 </body>
 </html>
