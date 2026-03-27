@@ -17,13 +17,14 @@ public class AthleteController {
 
     @GetMapping
     public String list(Model model) {
-        model.addAttribute("athletes", athleteService.findAll());
+        model.addAttribute("athleteItems", athleteService.findAllWithLatestInfo());
         return "athlete/list";
     }
 
     @GetMapping("/{id}")
     public String detail(@PathVariable Long id, Model model) {
         model.addAttribute("athlete", athleteService.findById(id));
+        model.addAttribute("history", athleteService.findCompetitionHistory(id));
         return "athlete/detail";
     }
 }

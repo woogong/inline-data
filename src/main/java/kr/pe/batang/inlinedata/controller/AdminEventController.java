@@ -8,6 +8,7 @@ import kr.pe.batang.inlinedata.service.CompetitionService;
 import kr.pe.batang.inlinedata.service.EntryImportService;
 import kr.pe.batang.inlinedata.service.EntryService;
 import kr.pe.batang.inlinedata.service.EventService;
+import kr.pe.batang.inlinedata.service.MappingService;
 import kr.pe.batang.inlinedata.service.ResultParsingService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -41,6 +42,7 @@ public class AdminEventController {
     private final EntryService entryService;
     private final EntryImportService entryImportService;
     private final ResultParsingService resultParsingService;
+    private final MappingService mappingService;
 
     // --- 종목 목록 ---
 
@@ -49,6 +51,17 @@ public class AdminEventController {
         model.addAttribute("competition", competitionService.findById(compId));
         model.addAttribute("events", eventService.findByCompetitionId(compId));
         return "admin/event/list";
+    }
+
+    @PostMapping("/bulk-register")
+    @ResponseBody
+    public Map<String, Object> bulkRegister(@PathVariable Long compId) {
+        var result = mappingService.bulkRegister(compId);
+        return Map.of("status", "ok",
+                "teamsCreated", result.teamsCreated(),
+                "teamsMapped", result.teamsMapped(),
+                "athletesCreated", result.athletesCreated(),
+                "athletesMapped", result.athletesMapped());
     }
 
     @PostMapping("/import-result")

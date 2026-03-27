@@ -13,34 +13,111 @@
         nav a:hover { color: #fff; text-decoration: underline; }
         nav .nav-brand { font-weight: bold; font-size: 1.1rem; }
         main { padding: 1.5rem 0; }
-        table { width: 100%; border-collapse: collapse; margin: 1rem 0; }
-        th, td { padding: 0.6rem 0.8rem; border: 1px solid #ddd; text-align: left; }
+        .filters { display: flex; gap: 0.5rem; align-items: center; margin: 0.5rem 0 1rem; flex-wrap: wrap; }
+        .filters label { font-weight: 600; font-size: 0.85rem; }
+        .filters input, .filters select { padding: 0.3rem 0.5rem; border: 1px solid #ccc; border-radius: 4px; font-size: 0.85rem; }
+        .filters input[type="text"] { width: 100px; }
+        table { width: 100%; border-collapse: collapse; margin: 0.5rem 0; }
+        th, td { padding: 0.5rem 0.8rem; border: 1px solid #ddd; text-align: left; font-size: 0.9rem; }
         th { background: #f5f5f5; font-weight: 600; }
         tr:hover { background: #fafafa; }
         a { color: #3498db; }
+        .count { font-size: 0.85rem; color: #666; margin-left: 0.5rem; }
     </style>
 </head>
 <body>
     <div th:replace="~{fragments/header :: header}"></div>
     <main class="container">
-        <h1>선수 목록</h1>
+        <h1>선수 목록 <span class="count" id="countText"></span></h1>
+
+        <div class="filters">
+            <label>이름</label>
+            <input type="text" id="filterName" placeholder="이름" oninput="applyFilter()">
+            <label>성별</label>
+            <select id="filterGender" onchange="applyFilter()">
+                <option value="">전체</option>
+                <option value="남">남</option>
+                <option value="여">여</option>
+            </select>
+            <label>부별</label>
+            <select id="filterDivision" onchange="applyFilter()">
+                <option value="">전체</option>
+                <option value="초등부 1,2학년">초등12</option>
+                <option value="초등부 3,4학년">초등34</option>
+                <option value="초등부 5,6학년">초등56</option>
+                <option value="중부">중등</option>
+                <option value="고부">고등</option>
+                <option value="대부">대학</option>
+                <option value="일부">일반</option>
+            </select>
+            <label>지역</label>
+            <select id="filterRegion" onchange="applyFilter()"><option value="">전체</option></select>
+            <label>소속</label>
+            <input type="text" id="filterTeam" placeholder="소속" oninput="applyFilter()">
+        </div>
+
         <table>
             <thead>
                 <tr>
                     <th>이름</th>
                     <th>성별</th>
+                    <th>부별</th>
+                    <th>지역</th>
+                    <th>소속</th>
                 </tr>
             </thead>
-            <tbody>
-                <tr th:each="a : ${athletes}">
-                    <td><a th:href="@{/athletes/{id}(id=${a.id})}" th:text="${a.name}"></a></td>
-                    <td th:text="${a.gender == 'M' ? '남' : (a.gender == 'F' ? '여' : '혼성')}"></td>
+            <tbody id="athleteBody">
+                <tr th:each="item : ${athleteItems}"
+                    th:attr="data-name=${item.athlete.name},
+                             data-gender=${item.athlete.gender == 'M' ? '남' : (item.athlete.gender == 'F' ? '여' : '혼성')},
+                             data-division=${item.division},
+                             data-region=${item.region},
+                             data-team=${item.teamName}">
+                    <td><a th:href="@{/athletes/{id}(id=${item.athlete.id})}" th:text="${item.athlete.name}"></a></td>
+                    <td th:text="${item.athlete.gender == 'M' ? '남' : (item.athlete.gender == 'F' ? '여' : '혼성')}"></td>
+                    <td th:text="${item.division}"></td>
+                    <td th:text="${item.region}"></td>
+                    <td th:text="${item.teamName}"></td>
                 </tr>
-                <tr th:if="${#lists.isEmpty(athletes)}">
-                    <td colspan="2" style="text-align:center; color:#999;">등록된 선수가 없습니다.</td>
+                <tr th:if="${#lists.isEmpty(athleteItems)}">
+                    <td colspan="5" style="text-align:center; color:#999;">등록된 선수가 없습니다.</td>
                 </tr>
             </tbody>
         </table>
     </main>
+
+    <script>
+        const rows = document.querySelectorAll('#athleteBody tr[data-name]');
+        const filterRegion = document.getElementById('filterRegion');
+
+        // 지역 콤보 옵션 채우기
+        const regions = new Set();
+        rows.forEach(r => { if (r.dataset.region) regions.add(r.dataset.region); });
+        [...regions].sort().forEach(r => { const o = document.createElement('option'); o.value = r; o.textContent = r; filterRegion.appendChild(o); });
+
+        function applyFilter() {
+            const name = document.getElementById('filterName').value.toLowerCase();
+            const gender = document.getElementById('filterGender').value;
+            const division = document.getElementById('filterDivision').value;
+            const region = filterRegion.value;
+            const team = document.getElementById('filterTeam').value.toLowerCase();
+            let visible = 0;
+
+            rows.forEach(r => {
+                const show =
+                    (!name || (r.dataset.name || '').toLowerCase().includes(name)) &&
+                    (!gender || r.dataset.gender === gender) &&
+                    (!division || (r.dataset.division || '').includes(division)) &&
+                    (!region || r.dataset.region === region) &&
+                    (!team || (r.dataset.team || '').toLowerCase().includes(team));
+                r.style.display = show ? '' : 'none';
+                if (show) visible++;
+            });
+
+            document.getElementById('countText').textContent = '(' + visible + '/' + rows.length + ')';
+        }
+
+        applyFilter();
+    </script>
 </body>
 </html>

@@ -44,6 +44,7 @@
                 <input type="file" name="file" accept=".pdf" required style="font-size:0.85rem;">
                 <button type="submit" class="btn btn-primary">조편성 PDF 가져오기</button>
             </form>
+            <button class="btn btn-success" onclick="doBulkRegister()">선수/팀 일괄 등록</button>
             <a th:href="@{/admin/competitions/{compId}/mapping(compId=${competition.id})}" class="btn btn-primary">선수 매핑</a>
             <a th:href="@{/admin/competitions/{id}(id=${competition.id})}" class="btn btn-secondary">대회로 돌아가기</a>
         </div>
@@ -111,6 +112,18 @@
         filterEvt.addEventListener('change', applyFilter);
 
         const RESULT_IMPORT_URL = /*[[@{/admin/competitions/{compId}/events/import-result(compId=${competition.id})}]]*/ '';
+        const BULK_REGISTER_URL = /*[[@{/admin/competitions/{compId}/events/bulk-register(compId=${competition.id})}]]*/ '';
+
+        function doBulkRegister() {
+            if (!confirm('개인전 엔트리를 기반으로 선수와 팀을 일괄 등록합니다.\n이미 등록된 항목은 건너뜁니다.\n\n진행하시겠습니까?')) return;
+            fetch(BULK_REGISTER_URL, { method: 'POST' })
+                .then(r => r.json())
+                .then(data => {
+                    alert('팀: ' + data.teamsCreated + '개 생성, ' + data.teamsMapped + '건 매핑\n' +
+                          '선수: ' + data.athletesCreated + '명 생성, ' + data.athletesMapped + '건 매핑');
+                })
+                .catch(err => alert('오류: ' + err.message));
+        }
 
         async function uploadResultFiles() {
             const input = document.getElementById('resultFiles');
