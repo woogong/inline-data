@@ -48,6 +48,8 @@
                th:classappend="${tab == 'events'} ? 'active'">종목</a>
             <a th:href="@{/competitions/{id}(id=${competition.id}, tab='stats')}"
                th:classappend="${tab == 'stats'} ? 'active'">참가 선수 통계</a>
+            <a th:href="@{/competitions/{id}(id=${competition.id}, tab='records')}"
+               th:classappend="${tab == 'records'} ? 'active'">신기록</a>
         </div>
 
         <!-- 대회 개요 탭 -->
@@ -153,6 +155,46 @@
                     </tr>
                     <tr th:if="${stats.divisionStats.isEmpty()}">
                         <td colspan="4" style="text-align:center; color:#999;">통계 데이터가 없습니다.</td>
+                    </tr>
+                </tbody>
+            </table>
+        </div>
+
+        <!-- 신기록 탭 -->
+        <div class="tab-content" th:if="${tab == 'records'}">
+            <div th:if="${newRecords.isEmpty()}" class="empty">신기록이 없습니다.</div>
+            <table th:if="${!newRecords.isEmpty()}">
+                <thead>
+                    <tr>
+                        <th>구분</th>
+                        <th>부별</th>
+                        <th>종목</th>
+                        <th>라운드</th>
+                        <th>순위</th>
+                        <th>선수/팀</th>
+                        <th>소속</th>
+                        <th>기록</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <tr th:each="r : ${newRecords}">
+                        <td>
+                            <span th:text="${r.type}"
+                                  th:style="${r.type == '대회신' ? 'color:#e74c3c; font-weight:600;' :
+                                             (r.type == '부별신' ? 'color:#e67e22; font-weight:600;' :
+                                             (r.type == '한국신' ? 'color:#2980b9; font-weight:600;' :
+                                             (r.type == '세계신' ? 'color:#8e44ad; font-weight:600;' : '')))}"></span>
+                        </td>
+                        <td th:text="${r.divisionName}"></td>
+                        <td th:text="${r.eventName}"></td>
+                        <td th:text="${r.round}"></td>
+                        <td th:text="${r.ranking}"></td>
+                        <td th:text="${r.athleteName}"></td>
+                        <td>
+                            <span th:if="${r.region != null}" th:text="${r.region}"></span>
+                            <span th:if="${r.teamName != null}" th:text="' ' + ${r.teamName}"></span>
+                        </td>
+                        <td style="font-weight:600;" th:text="${r.record}"></td>
                     </tr>
                 </tbody>
             </table>
