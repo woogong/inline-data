@@ -224,4 +224,87 @@ public class MappingService {
                 .orElseThrow(() -> new IllegalArgumentException("엔트리를 찾을 수 없습니다. id=" + entryId));
         entry.unmapTeam();
     }
+
+    // ===== 일괄 등록 =====
+
+    public record BulkRegisterResult(int teamsCreated, int teamsMapped, int athletesCreated, int athletesMapped) {}
+
+    @Transactional
+    public BulkRegisterResult bulkRegister(Long competitionId) {
+        List<CompetitionEntry> entries = entryRepository.findIndividualEntriesWithAthlete(competitionId);
+
+        int teamsCreated = 0, teamsMapped = 0, athletesCreated = 0, athletesMapped = 0;
+
+        // 1. Team 등록+매핑
+        Map<String, List<CompetitionEntry>> teamGroups = entries.stream()
+                .filter(e -> e.getTeam() == null && e.getTeamName() != null && !e.getTeamName().isBlank()
+                        && e.getRegion() != null && !e.getRegion().isBlank())
+                .collect(Collectors.groupingBy(e -> e.getTeamName() + "|" + e.getRegion()));
+
+        for (Map.Entry<String, List<CompetitionEntry>> group : teamGroups.entrySet()) {
+            List<CompetitionEntry> ces = group.getValue();
+            CompetitionEntry sample = ces.getFirst();
+            boolean existed = teamRepository.findByNameAndRegion(sample.getTeamName(), sample.getRegion()).isPresent();
+            Team team = teamRepository.findByNameAndRegion(sample.getTeamName(), sample.getRegion())
+                    .orElseGet(() -> teamRepository.save(Team.builder()
+                            .name(sample.getTeamName()).region(sample.getRegion()).build()));
+            if (!existed) teamsCreated++;
+            for (CompetitionEntry ce : ces) {
+                ce.mapTeam(team);
+                teamsMapped++;
+            }
+        }
+
+        // 2. Athlete 등록+매핑 (이름+성별+팀명으로 그룹화)
+        Map<String, List<CompetitionEntry>> athleteGroups = entries.stream()
+                .filter(e -> e.getAthlete() == null)
+                .collect(Collectors.groupingBy(e ->
+                        e.getAthleteName() + "|" + e.getGender() + "|" + (e.getTeamName() != null ? e.getTeamName() : "")));
+
+        for (Map.Entry<String, List<CompetitionEntry>> group : athleteGroups.entrySet()) {
+            List<CompetitionEntry> ces = group.getValue();
+            CompetitionEntry sample = ces.getFirst();
+            String sampleTeam = sample.getTeamName() != null ? sample.getTeamName() : "";
+
+            // 기존 Athlete 검색
+            List<Athlete> candidates = athleteRepository.findByNameAndGender(sample.getAthleteName(), sample.getGender());
+
+            Athlete athlete;
+            if (candidates.isEmpty()) {
+                // 새 Athlete 생성
+                athlete = athleteRepository.save(Athlete.builder()
+                        .name(sample.getAthleteName())
+                        .gender(sample.getGender())
+                        .build());
+                athletesCreated++;
+            } else if (candidates.size() == 1) {
+                athlete = candidates.getFirst();
+            } else {
+                // 동명이인: 같은 팀으로 매핑된 이력이 있는 후보 검색
+                List<Athlete> teamMatched = candidates.stream()
+                        .filter(a -> entryRepository.findByAthleteId(a.getId()).stream()
+                                .anyMatch(he -> sampleTeam.equals(he.getTeamName() != null ? he.getTeamName() : "")))
+                        .toList();
+                if (teamMatched.size() == 1) {
+                    athlete = teamMatched.getFirst();
+                } else {
+                    // 구분 불가: 새 Athlete 생성 (notes에 팀 정보로 구별)
+                    String note = sample.getRegion() != null ? sample.getRegion() + " " + sampleTeam : sampleTeam;
+                    athlete = athleteRepository.save(Athlete.builder()
+                            .name(sample.getAthleteName())
+                            .gender(sample.getGender())
+                            .notes(note.isBlank() ? null : note)
+                            .build());
+                    athletesCreated++;
+                }
+            }
+
+            for (CompetitionEntry ce : ces) {
+                ce.mapAthlete(athlete);
+                athletesMapped++;
+            }
+        }
+
+        return new BulkRegisterResult(teamsCreated, teamsMapped, athletesCreated, athletesMapped);
+    }
 }

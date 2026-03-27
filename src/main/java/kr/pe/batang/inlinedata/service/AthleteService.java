@@ -12,7 +12,10 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.util.LinkedHashSet;
 import java.util.List;
+import java.util.Set;
+import java.util.stream.Collectors;
 
 @Service
 @RequiredArgsConstructor
@@ -28,10 +31,50 @@ public class AthleteService {
         return athleteRepository.findAllByOrderByNameAsc();
     }
 
+    public List<AthleteListItem> findAllWithLatestInfo() {
+        List<Athlete> athletes = athleteRepository.findAllByOrderByNameAsc();
+        return athletes.stream().map(a -> {
+            List<CompetitionEntry> entries = competitionEntryRepository.findByAthleteId(a.getId());
+            if (entries.isEmpty()) return new AthleteListItem(a, null, null, null);
+            // 최신 엔트리 (ID가 가장 큰 것 = 가장 나중에 등록된 것)
+            CompetitionEntry latest = entries.stream()
+                    .max(java.util.Comparator.comparingLong(CompetitionEntry::getId))
+                    .orElse(null);
+            if (latest == null) return new AthleteListItem(a, null, null, null);
+            // 부별 정보
+            List<HeatEntry> heatEntries = heatEntryRepository.findByEntryId(latest.getId());
+            String division = heatEntries.stream()
+                    .map(he -> he.getHeat().getEventRound().getEvent().getDivisionName())
+                    .distinct()
+                    .collect(Collectors.joining(", "));
+            return new AthleteListItem(a, latest.getRegion(), latest.getTeamName(),
+                    division.isEmpty() ? null : division);
+        }).toList();
+    }
+
     public List<Athlete> search(String name, Integer birthYear, String notes) {
         String nameParam = (name != null && !name.isBlank()) ? name.trim() : null;
         String notesParam = (notes != null && !notes.isBlank()) ? notes.trim() : null;
         return athleteRepository.search(nameParam, birthYear, notesParam);
+    }
+
+    public record AthleteListItem(Athlete athlete, String region, String teamName, String division) {}
+
+    public record CompetitionHistoryDto(String competitionName, String teamName, String region,
+                                           Integer grade, Set<String> divisions) {}
+
+    public List<CompetitionHistoryDto> findCompetitionHistory(Long athleteId) {
+        List<CompetitionEntry> entries = competitionEntryRepository.findByAthleteId(athleteId);
+        return entries.stream().map(ce -> {
+            // HeatEntry를 통해 출전 종목의 부별 수집
+            List<HeatEntry> heatEntries = heatEntryRepository.findByEntryId(ce.getId());
+            Set<String> divisions = heatEntries.stream()
+                    .map(he -> he.getHeat().getEventRound().getEvent().getDivisionName())
+                    .collect(Collectors.toCollection(LinkedHashSet::new));
+            return new CompetitionHistoryDto(
+                    ce.getCompetition().getShortName() != null ? ce.getCompetition().getShortName() : ce.getCompetition().getName(),
+                    ce.getTeamName(), ce.getRegion(), ce.getGrade(), divisions);
+        }).toList();
     }
 
     public Athlete findById(Long id) {
