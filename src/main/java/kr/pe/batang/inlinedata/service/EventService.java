@@ -46,6 +46,10 @@ public class EventService {
 
     public record DivisionStat(String division, int male, int female, int total) {}
 
+    public record NewRecordInfo(String type, String athleteName, String region, String teamName,
+                                String divisionName, String eventName, String round,
+                                String record, Integer ranking) {}
+
     public record ParticipantStats(int totalMale, int totalFemale, int totalAll,
                                    List<DivisionStat> divisionStats) {}
 
@@ -129,6 +133,48 @@ public class EventService {
                 .toList();
 
         return new ParticipantStats(totalMale, totalFemale, totalMale + totalFemale, divisionStats);
+    }
+
+    public List<NewRecordInfo> findNewRecords(Long competitionId) {
+        return eventResultRepository.findNewRecordsByCompetitionId(competitionId).stream()
+                .map(er -> {
+                    var ce = er.getHeatEntry().getEntry();
+                    var heat = er.getHeatEntry().getHeat();
+                    var round = heat.getEventRound();
+                    var event = round.getEvent();
+                    return new NewRecordInfo(
+                            er.getNewRecord(), ce.getAthleteName(), ce.getRegion(), ce.getTeamName(),
+                            event.getDivisionName(), event.getEventName(), round.getRound(),
+                            er.getRecord(), er.getRanking());
+                })
+                .sorted(Comparator.comparingInt((NewRecordInfo r) -> recordTypeOrder(r.type()))
+                        .thenComparingInt(r -> divisionOrder(normalizeDivision(r.divisionName())))
+                        .thenComparingInt(r -> genderOrder(r.divisionName()))
+                        .thenComparingInt(r -> extractDistance(r.eventName()))
+                        .thenComparing(r -> r.record() != null ? r.record() : "zzz"))
+                .toList();
+    }
+
+    private static int recordTypeOrder(String type) {
+        return switch (type) {
+            case "세계신" -> 0;
+            case "한국신" -> 1;
+            case "부별신" -> 2;
+            case "대회신" -> 3;
+            default -> 9;
+        };
+    }
+
+    private static int genderOrder(String divisionName) {
+        if (divisionName.startsWith("여")) return 0;
+        if (divisionName.startsWith("남")) return 1;
+        return 2; // 혼성
+    }
+
+    private static int extractDistance(String eventName) {
+        java.util.regex.Matcher m = java.util.regex.Pattern.compile("(\\d[\\d,]*)m").matcher(eventName);
+        if (m.find()) return Integer.parseInt(m.group(1).replace(",", ""));
+        return 99999;
     }
 
     private static String normalizeDivision(String divisionName) {

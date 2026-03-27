@@ -35,6 +35,8 @@ public class CompetitionController {
             model.addAttribute("medals", eventService.findMedalsByCompetitionId(id));
         } else if ("stats".equals(tab)) {
             model.addAttribute("stats", eventService.findParticipantStats(id));
+        } else if ("records".equals(tab)) {
+            model.addAttribute("newRecords", eventService.findNewRecords(id));
         }
         return "competition/detail";
     }
