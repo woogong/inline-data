@@ -45,6 +45,8 @@ public interface CompetitionEntryRepository extends JpaRepository<CompetitionEnt
 
     List<CompetitionEntry> findByCompetitionIdAndAthleteIsNull(Long competitionId);
 
+    List<CompetitionEntry> findByAthleteNameAndGender(String athleteName, String gender);
+
     List<CompetitionEntry> findByCompetitionIdAndTeamIsNull(Long competitionId);
 
     @Query("SELECT DISTINCT ce FROM CompetitionEntry ce " +

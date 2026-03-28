@@ -3,6 +3,7 @@ package kr.pe.batang.inlinedata.service;
 import kr.pe.batang.inlinedata.controller.dto.AthleteFormDto;
 import kr.pe.batang.inlinedata.entity.Athlete;
 import kr.pe.batang.inlinedata.entity.CompetitionEntry;
+import kr.pe.batang.inlinedata.entity.EventResult;
 import kr.pe.batang.inlinedata.entity.HeatEntry;
 import kr.pe.batang.inlinedata.repository.AthleteRepository;
 import kr.pe.batang.inlinedata.repository.CompetitionEntryRepository;
@@ -12,9 +13,7 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
-import java.util.LinkedHashSet;
 import java.util.List;
-import java.util.Set;
 import java.util.stream.Collectors;
 
 @Service
@@ -35,18 +34,22 @@ public class AthleteService {
         List<Athlete> athletes = athleteRepository.findAllByOrderByNameAsc();
         return athletes.stream().map(a -> {
             List<CompetitionEntry> entries = competitionEntryRepository.findByAthleteId(a.getId());
+            if (entries.isEmpty()) {
+                entries = competitionEntryRepository.findByAthleteNameAndGender(a.getName(), a.getGender());
+            }
             if (entries.isEmpty()) return new AthleteListItem(a, null, null, null);
-            // 최신 엔트리 (ID가 가장 큰 것 = 가장 나중에 등록된 것)
             CompetitionEntry latest = entries.stream()
                     .max(java.util.Comparator.comparingLong(CompetitionEntry::getId))
                     .orElse(null);
             if (latest == null) return new AthleteListItem(a, null, null, null);
-            // 부별 정보
-            List<HeatEntry> heatEntries = heatEntryRepository.findByEntryId(latest.getId());
-            String division = heatEntries.stream()
-                    .map(he -> he.getHeat().getEventRound().getEvent().getDivisionName())
-                    .distinct()
-                    .collect(Collectors.joining(", "));
+            String division = "";
+            try {
+                List<HeatEntry> heatEntries = heatEntryRepository.findByEntryId(latest.getId());
+                division = heatEntries.stream()
+                        .map(he -> he.getHeat().getEventRound().getEvent().getDivisionName())
+                        .distinct()
+                        .collect(Collectors.joining(", "));
+            } catch (Exception ignored) {}
             return new AthleteListItem(a, latest.getRegion(), latest.getTeamName(),
                     division.isEmpty() ? null : division);
         }).toList();
@@ -60,21 +63,65 @@ public class AthleteService {
 
     public record AthleteListItem(Athlete athlete, String region, String teamName, String division) {}
 
-    public record CompetitionHistoryDto(String competitionName, String teamName, String region,
-                                           Integer grade, Set<String> divisions) {}
+    public record AthleteProfileDto(String region, String teamName, String divisionsText) {}
 
-    public List<CompetitionHistoryDto> findCompetitionHistory(Long athleteId) {
+    public record PerformanceDto(String competitionName, String divisionName, String eventName,
+                                 String round, Integer ranking, String record, String newRecord,
+                                 String qualification, String note, Integer eventNumber) {}
+
+    public AthleteProfileDto findLatestProfile(Long athleteId) {
+        Athlete athlete = findById(athleteId);
         List<CompetitionEntry> entries = competitionEntryRepository.findByAthleteId(athleteId);
-        return entries.stream().map(ce -> {
-            // HeatEntry를 통해 출전 종목의 부별 수집
-            List<HeatEntry> heatEntries = heatEntryRepository.findByEntryId(ce.getId());
-            Set<String> divisions = heatEntries.stream()
+        if (entries.isEmpty()) {
+            entries = competitionEntryRepository.findByAthleteNameAndGender(athlete.getName(), athlete.getGender());
+        }
+        if (entries.isEmpty()) return new AthleteProfileDto(null, null, null);
+        CompetitionEntry latest = entries.stream()
+                .max(java.util.Comparator.comparingLong(CompetitionEntry::getId)).orElse(null);
+        if (latest == null) return new AthleteProfileDto(null, null, null);
+        String division = "";
+        try {
+            List<HeatEntry> heatEntries = heatEntryRepository.findByEntryId(latest.getId());
+            division = heatEntries.stream()
                     .map(he -> he.getHeat().getEventRound().getEvent().getDivisionName())
-                    .collect(Collectors.toCollection(LinkedHashSet::new));
-            return new CompetitionHistoryDto(
-                    ce.getCompetition().getShortName() != null ? ce.getCompetition().getShortName() : ce.getCompetition().getName(),
-                    ce.getTeamName(), ce.getRegion(), ce.getGrade(), divisions);
-        }).toList();
+                    .distinct().collect(Collectors.joining(", "));
+        } catch (Exception ignored) {}
+        return new AthleteProfileDto(latest.getRegion(), latest.getTeamName(), division.isEmpty() ? null : division);
+    }
+
+    public List<PerformanceDto> findPerformances(Long athleteId) {
+        Athlete athlete = findById(athleteId);
+        List<CompetitionEntry> entries = competitionEntryRepository.findByAthleteId(athleteId);
+        if (entries.isEmpty()) {
+            entries = competitionEntryRepository.findByAthleteNameAndGender(athlete.getName(), athlete.getGender());
+        }
+        List<PerformanceDto> performances = new java.util.ArrayList<>();
+        for (CompetitionEntry ce : entries) {
+            try {
+                List<HeatEntry> heatEntries = heatEntryRepository.findByEntryId(ce.getId());
+                String compName = ce.getCompetition().getShortName() != null
+                        ? ce.getCompetition().getShortName() : ce.getCompetition().getName();
+                for (HeatEntry he : heatEntries) {
+                    var round = he.getHeat().getEventRound();
+                    var event = round.getEvent();
+                    EventResult result = eventResultRepository.findByHeatEntryId(he.getId()).orElse(null);
+                    performances.add(new PerformanceDto(
+                            compName, event.getDivisionName(), event.getEventName(),
+                            round.getRound(),
+                            result != null ? result.getRanking() : null,
+                            result != null ? result.getRecord() : null,
+                            result != null ? result.getNewRecord() : null,
+                            result != null ? result.getQualification() : null,
+                            result != null ? result.getNote() : null,
+                            round.getEventNumber()
+                    ));
+                }
+            } catch (Exception ignored) {}
+        }
+        // 경기번호 역순 (최근 경기 먼저)
+        performances.sort(java.util.Comparator.comparingInt(
+                (PerformanceDto p) -> p.eventNumber() != null ? p.eventNumber() : 0).reversed());
+        return performances;
     }
 
     public Athlete findById(Long id) {

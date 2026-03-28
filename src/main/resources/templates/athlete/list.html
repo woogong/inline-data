@@ -60,7 +60,6 @@
             <thead>
                 <tr>
                     <th>이름</th>
-                    <th>성별</th>
                     <th>부별</th>
                     <th>지역</th>
                     <th>소속</th>
@@ -74,7 +73,6 @@
                              data-region=${item.region},
                              data-team=${item.teamName}">
                     <td><a th:href="@{/athletes/{id}(id=${item.athlete.id})}" th:text="${item.athlete.name}"></a></td>
-                    <td th:text="${item.athlete.gender == 'M' ? '남' : (item.athlete.gender == 'F' ? '여' : '혼성')}"></td>
                     <td th:text="${item.division}"></td>
                     <td th:text="${item.region}"></td>
                     <td th:text="${item.teamName}"></td>
@@ -94,6 +92,25 @@
         const regions = new Set();
         rows.forEach(r => { if (r.dataset.region) regions.add(r.dataset.region); });
         [...regions].sort().forEach(r => { const o = document.createElement('option'); o.value = r; o.textContent = r; filterRegion.appendChild(o); });
+
+        const STORAGE_KEY = 'athlete-filter';
+        const filterIds = ['filterName', 'filterGender', 'filterDivision', 'filterRegion', 'filterTeam'];
+
+        function saveFilters() {
+            const state = {};
+            filterIds.forEach(id => { state[id] = document.getElementById(id).value; });
+            sessionStorage.setItem(STORAGE_KEY, JSON.stringify(state));
+        }
+
+        function restoreFilters() {
+            const saved = sessionStorage.getItem(STORAGE_KEY);
+            if (!saved) return;
+            const state = JSON.parse(saved);
+            filterIds.forEach(id => {
+                const el = document.getElementById(id);
+                if (el && state[id] !== undefined) el.value = state[id];
+            });
+        }
 
         function applyFilter() {
             const name = document.getElementById('filterName').value.toLowerCase();
@@ -115,8 +132,10 @@
             });
 
             document.getElementById('countText').textContent = '(' + visible + '/' + rows.length + ')';
+            saveFilters();
         }
 
+        restoreFilters();
         applyFilter();
     </script>
 </body>

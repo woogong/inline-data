@@ -255,9 +255,8 @@ public class MappingService {
             }
         }
 
-        // 2. Athlete 등록+매핑 (이름+성별+팀명으로 그룹화)
+        // 2. Athlete 등록+매핑 (이름+성별+팀명으로 그룹화, 기존 매핑 보정 포함)
         Map<String, List<CompetitionEntry>> athleteGroups = entries.stream()
-                .filter(e -> e.getAthlete() == null)
                 .collect(Collectors.groupingBy(e ->
                         e.getAthleteName() + "|" + e.getGender() + "|" + (e.getTeamName() != null ? e.getTeamName() : "")));
 
@@ -266,42 +265,64 @@ public class MappingService {
             CompetitionEntry sample = ces.getFirst();
             String sampleTeam = sample.getTeamName() != null ? sample.getTeamName() : "";
 
-            // 기존 Athlete 검색
-            List<Athlete> candidates = athleteRepository.findByNameAndGender(sample.getAthleteName(), sample.getGender());
+            // 같은 이름+성별+팀명 그룹에서 올바른 Athlete 결정
+            Athlete correctAthlete = null;
 
-            Athlete athlete;
-            if (candidates.isEmpty()) {
-                // 새 Athlete 생성
-                athlete = athleteRepository.save(Athlete.builder()
-                        .name(sample.getAthleteName())
-                        .gender(sample.getGender())
-                        .build());
-                athletesCreated++;
-            } else if (candidates.size() == 1) {
-                athlete = candidates.getFirst();
-            } else {
-                // 동명이인: 같은 팀으로 매핑된 이력이 있는 후보 검색
-                List<Athlete> teamMatched = candidates.stream()
-                        .filter(a -> entryRepository.findByAthleteId(a.getId()).stream()
-                                .anyMatch(he -> sampleTeam.equals(he.getTeamName() != null ? he.getTeamName() : "")))
-                        .toList();
-                if (teamMatched.size() == 1) {
-                    athlete = teamMatched.getFirst();
-                } else {
-                    // 구분 불가: 새 Athlete 생성 (notes에 팀 정보로 구별)
-                    String note = sample.getRegion() != null ? sample.getRegion() + " " + sampleTeam : sampleTeam;
-                    athlete = athleteRepository.save(Athlete.builder()
-                            .name(sample.getAthleteName())
-                            .gender(sample.getGender())
-                            .notes(note.isBlank() ? null : note)
-                            .build());
-                    athletesCreated++;
+            // 이미 이 그룹에 매핑된 athlete가 있고, 그 athlete의 모든 엔트리가 같은 팀이면 사용
+            for (CompetitionEntry ce : ces) {
+                if (ce.getAthlete() != null) {
+                    List<CompetitionEntry> existingEntries = entryRepository.findByAthleteId(ce.getAthlete().getId());
+                    // 해당 athlete의 모든 엔트리가 같은 팀인지 확인
+                    boolean allSameTeam = existingEntries.stream()
+                            .allMatch(he -> sampleTeam.equals(he.getTeamName() != null ? he.getTeamName() : ""));
+                    if (allSameTeam) {
+                        correctAthlete = ce.getAthlete();
+                        break;
+                    }
+                    // 다른 팀 엔트리가 섞여 있으면 잘못된 매핑 → 기존 매핑 무시하고 새로 판단
                 }
             }
 
+            if (correctAthlete == null) {
+                // 기존 Athlete 검색
+                List<Athlete> candidates = athleteRepository.findByNameAndGender(sample.getAthleteName(), sample.getGender());
+
+                if (candidates.isEmpty()) {
+                    correctAthlete = athleteRepository.save(Athlete.builder()
+                            .name(sample.getAthleteName())
+                            .gender(sample.getGender())
+                            .build());
+                    athletesCreated++;
+                } else {
+                    // 같은 팀으로만 매핑된 후보 검색 (다른 팀이 섞여 있으면 제외)
+                    List<Athlete> teamMatched = candidates.stream()
+                            .filter(a -> {
+                                List<CompetitionEntry> aEntries = entryRepository.findByAthleteId(a.getId());
+                                return !aEntries.isEmpty() && aEntries.stream()
+                                        .allMatch(he -> sampleTeam.equals(he.getTeamName() != null ? he.getTeamName() : ""));
+                            })
+                            .toList();
+                    if (teamMatched.size() == 1) {
+                        correctAthlete = teamMatched.getFirst();
+                    } else {
+                        // 새 Athlete 생성
+                        String note = sample.getRegion() != null ? sample.getRegion() + " " + sampleTeam : sampleTeam;
+                        correctAthlete = athleteRepository.save(Athlete.builder()
+                                .name(sample.getAthleteName())
+                                .gender(sample.getGender())
+                                .notes(note.isBlank() ? null : note)
+                                .build());
+                        athletesCreated++;
+                    }
+                }
+            }
+
+            // 매핑 적용 (잘못된 매핑 보정 포함)
             for (CompetitionEntry ce : ces) {
-                ce.mapAthlete(athlete);
-                athletesMapped++;
+                if (ce.getAthlete() == null || !ce.getAthlete().getId().equals(correctAthlete.getId())) {
+                    ce.mapAthlete(correctAthlete);
+                    athletesMapped++;
+                }
             }
         }
 
