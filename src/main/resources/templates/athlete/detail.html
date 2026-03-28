@@ -13,19 +13,26 @@
         nav a:hover { color: #fff; text-decoration: underline; }
         nav .nav-brand { font-weight: bold; font-size: 1.1rem; }
         main { padding: 1.5rem 0; }
-        dl { margin: 1rem 0; }
-        dt { font-weight: 600; color: #555; margin-top: 0.8rem; }
-        dd { margin-left: 0; padding: 0.3rem 0; }
-        table { width: 100%; border-collapse: collapse; margin: 1rem 0; }
-        th, td { padding: 0.5rem 0.8rem; border: 1px solid #ddd; text-align: left; }
+        dl { margin: 0.5rem 0 1rem; }
+        dt { font-weight: 600; color: #555; margin-top: 0.5rem; display: inline-block; width: 60px; }
+        dd { display: inline; margin-left: 0; }
+        dd::after { content: ''; display: block; }
+        table { width: 100%; border-collapse: collapse; margin: 0.5rem 0; }
+        th, td { padding: 0.4rem 0.8rem; border: 1px solid #ddd; text-align: left; font-size: 0.9rem; }
         th { background: #f5f5f5; font-weight: 600; }
         tr:hover { background: #fafafa; }
-        h2 { margin-top: 1.5rem; color: #2c3e50; font-size: 1.1rem; }
+        h2 { margin-top: 1.5rem; margin-bottom: 0.3rem; color: #2c3e50; font-size: 1.1rem; }
+        .new-record { font-weight: 600; font-size: 0.8rem; }
+        .new-record.nr-competition { color: #e74c3c; }
+        .new-record.nr-division { color: #e67e22; }
+        .new-record.nr-korea { color: #2980b9; }
+        .new-record.nr-world { color: #8e44ad; }
+        .q-mark { color: #27ae60; font-weight: 700; }
+        .note { color: #999; font-size: 0.85rem; }
         .btn { display: inline-block; padding: 0.4rem 1rem; border: none; border-radius: 4px; cursor: pointer; text-decoration: none; font-size: 0.9rem; }
         .btn-secondary { background: #95a5a6; color: #fff; }
         .btn-secondary:hover { background: #7f8c8d; }
         .actions { margin-top: 1.5rem; }
-        .division-tag { display: inline-block; padding: 0.1rem 0.4rem; background: #e8f4fd; border-radius: 3px; font-size: 0.8rem; margin: 0.1rem; }
     </style>
 </head>
 <body>
@@ -33,36 +40,60 @@
     <main class="container">
         <h1 th:text="${athlete.name}">선수명</h1>
         <dl>
-            <dt>성별</dt>
-            <dd th:text="${athlete.gender == 'M' ? '남' : (athlete.gender == 'F' ? '여' : '혼성')}"></dd>
             <th:block th:if="${athlete.birthYear != null}">
                 <dt>생년</dt>
                 <dd th:text="${athlete.birthYear}"></dd>
             </th:block>
+            <th:block th:if="${profile != null and profile.region != null}">
+                <dt>소속</dt>
+                <dd>
+                    <span th:text="${profile.region}"></span>
+                    <span th:if="${profile.teamName != null}" th:text="' ' + ${profile.teamName}"></span>
+                </dd>
+            </th:block>
+            <th:block th:if="${profile != null and profile.divisionsText != null}">
+                <dt>부별</dt>
+                <dd th:text="${profile.divisionsText}"></dd>
+            </th:block>
         </dl>
 
-        <th:block th:if="${!history.isEmpty()}">
-            <h2>대회 참가 이력</h2>
+        <th:block th:if="${performances != null and !performances.isEmpty()}">
+            <h2>경기 성과</h2>
             <table>
                 <thead>
                     <tr>
                         <th>대회</th>
-                        <th>소속</th>
-                        <th>학년</th>
-                        <th>출전 부별</th>
+                        <th>부별</th>
+                        <th>종목</th>
+                        <th>라운드</th>
+                        <th>순위</th>
+                        <th>기록</th>
+                        <th>진출</th>
+                        <th>비고</th>
                     </tr>
                 </thead>
                 <tbody>
-                    <tr th:each="h : ${history}">
-                        <td th:text="${h.competitionName}"></td>
+                    <tr th:each="p : ${performances}">
+                        <td th:text="${p.competitionName}"></td>
+                        <td th:text="${p.divisionName}"></td>
+                        <td th:text="${p.eventName}"></td>
+                        <td th:text="${p.round}"></td>
                         <td>
-                            <span th:if="${h.region != null}" th:text="${h.region}"></span>
-                            <span th:if="${h.teamName != null}" th:text="' ' + ${h.teamName}"></span>
+                            <span th:text="${p.ranking}"></span>
+                            <span th:if="${p.round == '결승' or p.round == '조별결승'}">
+                                <span th:if="${p.ranking == 1}"> &#x1F947;</span>
+                                <span th:if="${p.ranking == 2}"> &#x1F948;</span>
+                                <span th:if="${p.ranking == 3}"> &#x1F949;</span>
+                            </span>
                         </td>
-                        <td th:text="${h.grade}"></td>
                         <td>
-                            <span th:each="div : ${h.divisions}" class="division-tag" th:text="${div}"></span>
+                            <span th:text="${p.record}"></span>
+                            <span th:if="${p.newRecord != null}" class="new-record"
+                                  th:classappend="${p.newRecord == '대회신' ? 'nr-competition' : (p.newRecord == '부별신' ? 'nr-division' : (p.newRecord == '한국신' ? 'nr-korea' : (p.newRecord == '세계신' ? 'nr-world' : '')))}"
+                                  th:text="' ' + ${p.newRecord}"></span>
                         </td>
+                        <td><span th:if="${p.qualification != null}" class="q-mark" th:text="${p.qualification}"></span></td>
+                        <td><span th:if="${p.note != null}" class="note" th:text="${p.note}"></span></td>
                     </tr>
                 </tbody>
             </table>
