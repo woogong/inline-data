@@ -31,10 +31,22 @@ public interface EventResultRepository extends JpaRepository<EventResult, Long> 
            "JOIN eh.eventRound r " +
            "JOIN r.event e " +
            "WHERE e.competition.id = :compId " +
-           "AND (r.round = '결승' OR r.round = '조별결승') " +
+           "AND r.round = '결승' " +
            "AND er.ranking IN (1, 2, 3) " +
            "ORDER BY e.id, er.ranking")
     List<EventResult> findMedalResultsByCompetitionId(@Param("compId") Long competitionId);
+
+    @Query("SELECT er FROM EventResult er " +
+           "JOIN FETCH er.heatEntry he " +
+           "JOIN FETCH he.entry ce " +
+           "JOIN he.heat eh " +
+           "JOIN eh.eventRound r " +
+           "JOIN r.event e " +
+           "WHERE e.competition.id = :compId " +
+           "AND r.round = '결승' " +
+           "AND er.ranking BETWEEN 1 AND 6 " +
+           "ORDER BY e.id, er.ranking")
+    List<EventResult> findScoringResultsByCompetitionId(@Param("compId") Long competitionId);
 
     @Query("SELECT er FROM EventResult er " +
            "JOIN FETCH er.heatEntry he " +

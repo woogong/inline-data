@@ -31,6 +31,9 @@
         .btn-secondary:hover { background: #7f8c8d; }
         .actions { margin-top: 1.5rem; }
         .filters { display: flex; gap: 0.5rem; align-items: center; margin: 0.5rem 0; }
+        .team-tooltip { display: none; position: absolute; left: 0; top: 100%; z-index: 100; background: #fff; border: 1px solid #ddd; border-radius: 6px; padding: 0.5rem 0.8rem; box-shadow: 0 2px 8px rgba(0,0,0,0.15); min-width: 280px; }
+        .team-cell:hover .team-tooltip { display: block; }
+        .award-item { padding: 0.2rem 0; font-size: 0.85rem; white-space: nowrap; }
         .filters select { padding: 0.3rem 0.5rem; border: 1px solid #ccc; border-radius: 4px; font-size: 0.9rem; }
         .filters label { font-weight: 600; font-size: 0.9rem; }
         .empty { text-align: center; color: #999; padding: 2rem; }
@@ -50,6 +53,10 @@
                th:classappend="${tab == 'stats'} ? 'active'">참가 선수 통계</a>
             <a th:href="@{/competitions/{id}(id=${competition.id}, tab='records')}"
                th:classappend="${tab == 'records'} ? 'active'">신기록</a>
+            <a th:href="@{/competitions/{id}(id=${competition.id}, tab='regionMedals')}"
+               th:classappend="${tab == 'regionMedals'} ? 'active'">지역별 입상</a>
+            <a th:href="@{/competitions/{id}(id=${competition.id}, tab='teamMedals')}"
+               th:classappend="${tab == 'teamMedals'} ? 'active'">팀별 입상</a>
         </div>
 
         <!-- 대회 개요 탭 -->
@@ -163,6 +170,12 @@
         <!-- 신기록 탭 -->
         <div class="tab-content" th:if="${tab == 'records'}">
             <div th:if="${newRecords.isEmpty()}" class="empty">신기록이 없습니다.</div>
+            <div th:if="${!newRecords.isEmpty()}" class="filters">
+                <label>부별</label>
+                <select id="recordFilterDiv" onchange="filterRecords()"><option value="">전체</option></select>
+                <label style="margin-left:0.5rem;">종목</label>
+                <select id="recordFilterEvt" onchange="filterRecords()"><option value="">전체</option></select>
+            </div>
             <table th:if="${!newRecords.isEmpty()}">
                 <thead>
                     <tr>
@@ -177,7 +190,7 @@
                     </tr>
                 </thead>
                 <tbody>
-                    <tr th:each="r : ${newRecords}">
+                    <tr th:each="r : ${newRecords}" th:attr="data-div=${r.divisionName},data-evt=${r.eventName}">
                         <td>
                             <span th:text="${r.type}"
                                   th:style="${r.type == '대회신' ? 'color:#e74c3c; font-weight:600;' :
@@ -198,6 +211,85 @@
                     </tr>
                 </tbody>
             </table>
+        </div>
+
+        <!-- 지역별 입상 탭 -->
+        <div class="tab-content" th:if="${tab == 'regionMedals'}">
+            <div th:if="${regionMedalStats.isEmpty()}" class="empty">입상 기록이 없습니다.</div>
+            <table th:if="${!regionMedalStats.isEmpty()}">
+                <thead>
+                    <tr>
+                        <th>순위</th>
+                        <th>지역</th>
+                        <th style="text-align:center">&#x1F947;</th>
+                        <th style="text-align:center">&#x1F948;</th>
+                        <th style="text-align:center">&#x1F949;</th>
+                        <th style="text-align:center">합계</th>
+                        <th style="text-align:center">점수</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <tr th:each="r, iter : ${regionMedalStats}">
+                        <td th:text="${iter.count}"></td>
+                        <td th:text="${r.region}"></td>
+                        <td style="text-align:center; font-weight:600;" th:text="${r.gold > 0 ? r.gold : ''}"></td>
+                        <td style="text-align:center; font-weight:600;" th:text="${r.silver > 0 ? r.silver : ''}"></td>
+                        <td style="text-align:center; font-weight:600;" th:text="${r.bronze > 0 ? r.bronze : ''}"></td>
+                        <td style="text-align:center; font-weight:600;" th:text="${r.total}"></td>
+                        <td style="text-align:center; font-weight:700;" th:text="${r.score}"></td>
+                    </tr>
+                </tbody>
+            </table>
+            <p style="margin-top:0.5rem; font-size:0.8rem; color:#888;">
+                점수: 1위 7점, 2위 5점, 3위 4점, 4위 3점, 5위 2점, 6위 1점 (일반B조 제외)
+            </p>
+        </div>
+
+        <!-- 팀별 입상 탭 -->
+        <div class="tab-content" th:if="${tab == 'teamMedals'}">
+            <div th:if="${teamMedalStats.isEmpty()}" class="empty">입상 기록이 없습니다.</div>
+            <div th:if="${!teamMedalStats.isEmpty()}">
+                <div class="filters">
+                    <label>지역</label>
+                    <select id="tmFilterRegion" onchange="filterTeamMedals()"><option value="">전체</option></select>
+                    <label style="margin-left:0.5rem;">부별</label>
+                    <select id="tmFilterDiv" onchange="filterTeamMedals()"><option value="">전체</option></select>
+                </div>
+                <table>
+                    <thead>
+                        <tr>
+                            <th>지역</th>
+                            <th>팀명</th>
+                            <th style="text-align:center">&#x1F947;</th>
+                            <th style="text-align:center">&#x1F948;</th>
+                            <th style="text-align:center">&#x1F949;</th>
+                            <th style="text-align:center">합계</th>
+                        </tr>
+                    </thead>
+                    <tbody id="teamMedalBody">
+                        <tr th:each="t : ${teamMedalStats}"
+                            th:attr="data-region=${t.region},data-divs=${t.divisions}">
+                            <td th:text="${t.region}"></td>
+                            <td class="team-cell" style="position:relative; cursor:pointer;">
+                                <span th:text="${t.teamName}"></span>
+                                <div class="team-tooltip">
+                                    <div th:each="aw : ${t.awards}" class="award-item">
+                                        <span th:if="${aw.ranking == 1}">&#x1F947;</span>
+                                        <span th:if="${aw.ranking == 2}">&#x1F948;</span>
+                                        <span th:if="${aw.ranking == 3}">&#x1F949;</span>
+                                        <span th:text="${aw.athleteName}"></span>
+                                        <span style="color:#888; font-size:0.8rem;" th:text="'(' + ${aw.divisionName} + ' ' + ${aw.eventName} + ')'"></span>
+                                    </div>
+                                </div>
+                            </td>
+                            <td style="text-align:center; font-weight:600;" th:text="${t.gold > 0 ? t.gold : ''}"></td>
+                            <td style="text-align:center; font-weight:600;" th:text="${t.silver > 0 ? t.silver : ''}"></td>
+                            <td style="text-align:center; font-weight:600;" th:text="${t.bronze > 0 ? t.bronze : ''}"></td>
+                            <td style="text-align:center; font-weight:700;" th:text="${t.total}"></td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
         </div>
 
         <div class="actions">
@@ -224,6 +316,50 @@
         }
         filterDiv.addEventListener('change', applyFilter);
         filterEvt.addEventListener('change', applyFilter);
+    </script>
+
+    <script th:if="${tab == 'records'}">
+        const recRows = document.querySelectorAll('table tbody tr[data-div]');
+        const recFilterDiv = document.getElementById('recordFilterDiv');
+        const recFilterEvt = document.getElementById('recordFilterEvt');
+
+        const recDivisions = new Set();
+        const recEventNames = new Set();
+        recRows.forEach(r => { recDivisions.add(r.dataset.div); recEventNames.add(r.dataset.evt); });
+        [...recDivisions].sort().forEach(d => { const o = document.createElement('option'); o.value = d; o.textContent = d; recFilterDiv.appendChild(o); });
+        [...recEventNames].sort().forEach(e => { const o = document.createElement('option'); o.value = e; o.textContent = e; recFilterEvt.appendChild(o); });
+
+        function filterRecords() {
+            const d = recFilterDiv.value, e = recFilterEvt.value;
+            recRows.forEach(r => {
+                r.style.display = (!d || r.dataset.div === d) && (!e || r.dataset.evt === e) ? '' : 'none';
+            });
+        }
+    </script>
+
+    <script th:if="${tab == 'teamMedals'}">
+        const tmRows = document.querySelectorAll('#teamMedalBody tr');
+        const tmFilterRegion = document.getElementById('tmFilterRegion');
+        const tmFilterDiv = document.getElementById('tmFilterDiv');
+
+        const tmRegions = new Set();
+        const tmDivs = new Set();
+        tmRows.forEach(r => {
+            if (r.dataset.region) tmRegions.add(r.dataset.region);
+            if (r.dataset.divs) r.dataset.divs.split(', ').forEach(d => tmDivs.add(d));
+        });
+        [...tmRegions].sort().forEach(r => { const o = document.createElement('option'); o.value = r; o.textContent = r; tmFilterRegion.appendChild(o); });
+        [...tmDivs].sort().forEach(d => { const o = document.createElement('option'); o.value = d; o.textContent = d; tmFilterDiv.appendChild(o); });
+
+        function filterTeamMedals() {
+            const region = tmFilterRegion.value;
+            const div = tmFilterDiv.value;
+            tmRows.forEach(r => {
+                const matchRegion = !region || r.dataset.region === region;
+                const matchDiv = !div || (r.dataset.divs || '').includes(div);
+                r.style.display = (matchRegion && matchDiv) ? '' : 'none';
+            });
+        }
     </script>
 </body>
 </html>

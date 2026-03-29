@@ -1,5 +1,6 @@
 package kr.pe.batang.inlinedata.controller;
 
+import java.util.List;
 import kr.pe.batang.inlinedata.entity.Event;
 import kr.pe.batang.inlinedata.entity.EventRound;
 import kr.pe.batang.inlinedata.service.CompetitionService;
@@ -30,9 +31,16 @@ public class EventController {
     @GetMapping("/{eventId}")
     public String detail(@PathVariable Long compId, @PathVariable Long eventId, Model model) {
         Event event = eventService.findById(eventId);
+        List<EventRound> rounds = eventService.findRoundsByEventId(eventId);
+
+        // 결승만 있으면 바로 라운드 상세로 이동
+        if (rounds.size() == 1) {
+            return "redirect:/competitions/" + compId + "/events/" + eventId + "/rounds/" + rounds.getFirst().getId();
+        }
+
         model.addAttribute("competition", competitionService.findById(compId));
         model.addAttribute("event", event);
-        model.addAttribute("rounds", eventService.findRoundsByEventId(eventId));
+        model.addAttribute("rounds", rounds);
         return "event/detail";
     }
 

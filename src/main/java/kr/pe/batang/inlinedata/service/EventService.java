@@ -46,6 +46,13 @@ public class EventService {
 
     public record DivisionStat(String division, int male, int female, int total) {}
 
+    public record RegionMedalStat(String region, int gold, int silver, int bronze, int total, int score) {}
+
+    public record AthleteAward(String athleteName, String divisionName, String eventName, int ranking) {}
+
+    public record TeamMedalStat(String teamName, String region, int gold, int silver, int bronze,
+                                int total, String divisions, List<AthleteAward> awards) {}
+
     public record NewRecordInfo(String type, String athleteName, String region, String teamName,
                                 String divisionName, String eventName, String round,
                                 String record, Integer ranking) {}
@@ -135,6 +142,53 @@ public class EventService {
         return new ParticipantStats(totalMale, totalFemale, totalMale + totalFemale, divisionStats);
     }
 
+    /**
+     * DTT 종목의 라운드 순위를 조별이 아닌 전체 기록 순으로 재계산한다.
+     */
+    @Transactional
+    public int recalculateDttRankings(Long eventRoundId) {
+        List<EventHeat> heats = eventHeatRepository.findByEventRoundIdOrderByHeatNumberAsc(eventRoundId);
+        if (heats.isEmpty()) return 0;
+
+        List<Long> heatIds = heats.stream().map(EventHeat::getId).toList();
+        List<EventResult> allResults = eventResultRepository.findByHeatIdsWithDetails(heatIds);
+        if (allResults.isEmpty()) return 0;
+
+        // 기록 순 정렬 (기록이 없으면 맨 뒤)
+        allResults.sort(Comparator.comparing(
+                (EventResult er) -> er.getRecord() != null ? er.getRecord() : "zzz"));
+
+        // 순위 재할당
+        for (int i = 0; i < allResults.size(); i++) {
+            EventResult er = allResults.get(i);
+            if (er.getRecord() != null) {
+                er.updateResult(i + 1, er.getRecord(), er.getNewRecord(),
+                        er.getQualification(), er.getNote());
+            } else {
+                er.updateResult(null, er.getRecord(), er.getNewRecord(),
+                        er.getQualification(), er.getNote());
+            }
+        }
+        return allResults.size();
+    }
+
+    /**
+     * 대회의 모든 DTT 종목 라운드 순위를 재계산한다.
+     */
+    @Transactional
+    public int recalculateAllDttRankings(Long competitionId) {
+        List<Event> events = findByCompetitionId(competitionId);
+        int total = 0;
+        for (Event event : events) {
+            if (!event.getEventName().contains("DTT")) continue;
+            List<EventRound> rounds = eventRoundRepository.findByEventIdOrderByEventNumberAsc(event.getId());
+            for (EventRound round : rounds) {
+                total += recalculateDttRankings(round.getId());
+            }
+        }
+        return total;
+    }
+
     public List<NewRecordInfo> findNewRecords(Long competitionId) {
         return eventResultRepository.findNewRecordsByCompetitionId(competitionId).stream()
                 .map(er -> {
@@ -152,6 +206,96 @@ public class EventService {
                         .thenComparingInt(r -> genderOrder(r.divisionName()))
                         .thenComparingInt(r -> extractDistance(r.eventName()))
                         .thenComparing(r -> r.record() != null ? r.record() : "zzz"))
+                .toList();
+    }
+
+    public List<RegionMedalStat> findRegionMedalStats(Long competitionId) {
+        List<EventResult> results = eventResultRepository.findScoringResultsByCompetitionId(competitionId);
+
+        // region → {gold, silver, bronze, score}
+        Map<String, int[]> regionData = new LinkedHashMap<>(); // [gold, silver, bronze, score]
+
+        for (EventResult er : results) {
+            var ce = er.getHeatEntry().getEntry();
+            String region = ce.getRegion();
+            if (region == null || region.isBlank()) continue;
+
+            String divName = er.getHeatEntry().getHeat().getEventRound().getEvent().getDivisionName();
+            boolean isBGroup = divName.contains("일반(B조)");
+
+            int[] data = regionData.computeIfAbsent(region, k -> new int[4]);
+            int ranking = er.getRanking();
+
+            // 메달 집계 (1~3위)
+            if (ranking == 1) data[0]++;
+            else if (ranking == 2) data[1]++;
+            else if (ranking == 3) data[2]++;
+
+            // 점수 (B조 제외)
+            if (!isBGroup) {
+                int score = switch (ranking) {
+                    case 1 -> 7;
+                    case 2 -> 5;
+                    case 3 -> 4;
+                    case 4 -> 3;
+                    case 5 -> 2;
+                    case 6 -> 1;
+                    default -> 0;
+                };
+                data[3] += score;
+            }
+        }
+
+        return regionData.entrySet().stream()
+                .map(e -> {
+                    int[] d = e.getValue();
+                    return new RegionMedalStat(e.getKey(), d[0], d[1], d[2], d[0] + d[1] + d[2], d[3]);
+                })
+                .sorted(Comparator.comparingInt((RegionMedalStat r) -> -r.score()))
+                .toList();
+    }
+
+    public List<TeamMedalStat> findTeamMedalStats(Long competitionId) {
+        List<EventResult> medalResults = eventResultRepository.findMedalResultsByCompetitionId(competitionId);
+
+        Map<String, int[]> medalCounts = new LinkedHashMap<>();
+        Map<String, Set<String>> teamDivisions = new LinkedHashMap<>();
+        Map<String, String> teamRegions = new LinkedHashMap<>();
+        Map<String, List<AthleteAward>> teamAwards = new LinkedHashMap<>();
+
+        for (EventResult er : medalResults) {
+            var ce = er.getHeatEntry().getEntry();
+            String teamName = ce.getTeamName();
+            String region = ce.getRegion();
+            if (teamName == null || teamName.isBlank()) continue;
+
+            String key = teamName + "|" + (region != null ? region : "");
+            teamRegions.putIfAbsent(key, region);
+            int[] counts = medalCounts.computeIfAbsent(key, k -> new int[3]);
+            if (er.getRanking() == 1) counts[0]++;
+            else if (er.getRanking() == 2) counts[1]++;
+            else if (er.getRanking() == 3) counts[2]++;
+
+            var event = er.getHeatEntry().getHeat().getEventRound().getEvent();
+            teamDivisions.computeIfAbsent(key, k -> new LinkedHashSet<>()).add(event.getDivisionName());
+            teamAwards.computeIfAbsent(key, k -> new java.util.ArrayList<>())
+                    .add(new AthleteAward(ce.getAthleteName(), event.getDivisionName(),
+                            event.getEventName(), er.getRanking()));
+        }
+
+        return medalCounts.entrySet().stream()
+                .map(e -> {
+                    String[] parts = e.getKey().split("\\|", 2);
+                    int[] c = e.getValue();
+                    String divs = String.join(", ", teamDivisions.getOrDefault(e.getKey(), Set.of()));
+                    List<AthleteAward> awards = teamAwards.getOrDefault(e.getKey(), List.of());
+                    awards.sort(Comparator.comparingInt(AthleteAward::ranking));
+                    return new TeamMedalStat(parts[0], teamRegions.get(e.getKey()),
+                            c[0], c[1], c[2], c[0] + c[1] + c[2], divs, awards);
+                })
+                .sorted(Comparator.comparingInt((TeamMedalStat t) -> -t.total())
+                        .thenComparingInt(t -> -t.gold())
+                        .thenComparingInt(t -> -t.silver()))
                 .toList();
     }
 

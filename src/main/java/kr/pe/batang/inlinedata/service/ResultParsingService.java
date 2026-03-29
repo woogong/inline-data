@@ -18,6 +18,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.io.IOException;
+import java.util.Comparator;
 import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.List;
@@ -57,6 +58,11 @@ public class ResultParsingService {
             String trimmed = line.trim();
             Matcher headerMatch = Pattern.compile("^(\\d+)(?:-(\\d+))?\\s+(여|남).+").matcher(trimmed);
             if (headerMatch.matches()) {
+                // 결승종합은 조별 결과의 취합이므로 무시
+                if (trimmed.contains("결승종합")) {
+                    log.info("결승종합 파일 스킵: {}", pdfPath.getFileName());
+                    return new ImportResult(0, 0, 0);
+                }
                 eventNumber = Integer.parseInt(headerMatch.group(1));
                 heatNumber = headerMatch.group(2) != null ? Integer.parseInt(headerMatch.group(2)) : 0;
                 isTeamEvent = trimmed.contains("계주") || trimmed.contains("팀DTT") || trimmed.contains("팀dtt");
@@ -121,6 +127,11 @@ public class ResultParsingService {
             resultCount++;
         }
 
+        // DTT 종목이면 전체 기록 순으로 순위 재계산
+        if (!isTeamEvent && targetRound.getEvent().getEventName().contains("DTT")) {
+            recalculateDttRankings(targetRound.getId());
+        }
+
         return new ImportResult(resultCount, newEntryCount, 1);
     }
 
@@ -138,6 +149,25 @@ public class ResultParsingService {
             }
         }
         return new ImportResult(totalResults, totalNewEntries, totalFiles);
+    }
+
+    private void recalculateDttRankings(Long eventRoundId) {
+        List<EventHeat> heats = eventHeatRepository.findByEventRoundIdOrderByHeatNumberAsc(eventRoundId);
+        if (heats.isEmpty()) return;
+        List<Long> heatIds = heats.stream().map(EventHeat::getId).toList();
+        List<EventResult> allResults = eventResultRepository.findByHeatIdsWithDetails(heatIds);
+        if (allResults.isEmpty()) return;
+
+        allResults.sort(Comparator.comparing(
+                (EventResult er) -> er.getRecord() != null ? er.getRecord() : "zzz"));
+
+        for (int i = 0; i < allResults.size(); i++) {
+            EventResult er = allResults.get(i);
+            Integer newRanking = er.getRecord() != null ? i + 1 : null;
+            er.updateResult(newRanking, er.getRecord(), er.getNewRecord(),
+                    er.getQualification(), er.getNote());
+        }
+        log.info("DTT rankings recalculated for round {}: {} results", eventRoundId, allResults.size());
     }
 
     private CompetitionEntry findOrCreateCompetitionEntry(Long competitionId, String athleteName,
