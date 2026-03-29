@@ -38,6 +38,7 @@
         .actions { margin-top: 1.5rem; }
         .empty { color: #999; font-style: italic; margin: 1rem 0; }
     </style>
+    <style th:replace="~{fragments/athlete-modal :: styles}"></style>
 </head>
 <body>
     <div th:replace="~{fragments/header :: header}"></div>
@@ -61,7 +62,7 @@
                                 : (er.qualification != null ? 'qualified' : 'not-qualified')}">
                             <td th:text="${er.ranking}"></td>
                             <td th:text="${er.heatEntry.bibNumber}"></td>
-                            <td th:text="${er.heatEntry.entry.athleteName}"></td>
+                            <td><span class="athlete-link" th:text="${er.heatEntry.entry.athleteName}" th:attr="data-name=${er.heatEntry.entry.athleteName}"></span></td>
                             <td>
                                 <span th:if="${er.heatEntry.entry.region != null}" th:text="${er.heatEntry.entry.region} + ' ' + ${er.heatEntry.entry.teamName}"></span>
                                 <span th:if="${er.heatEntry.entry.grade != null}" th:text="${er.heatEntry.entry.grade}" style="color:#888; font-size:0.85rem;"></span>
@@ -88,7 +89,7 @@
                     <tbody>
                         <tr th:each="he : ${heatEntry.value}">
                             <td th:text="${he.bibNumber}"></td>
-                            <td th:text="${he.entry.athleteName}"></td>
+                            <td><span class="athlete-link" th:text="${he.entry.athleteName}" th:attr="data-name=${he.entry.athleteName}"></span></td>
                             <td><span th:if="${he.entry.region != null}" th:text="${he.entry.region} + ' ' + ${he.entry.teamName}"></span></td>
                             <td th:text="${he.entry.grade}"></td>
                         </tr>
@@ -101,5 +102,7 @@
             <a th:href="@{/competitions/{compId}/events/{eventId}(compId=${competition.id}, eventId=${event.id})}" class="btn btn-secondary">종목으로 돌아가기</a>
         </div>
     </main>
+
+    <div th:replace="~{fragments/athlete-modal :: modal(${competition.id})}"></div>
 </body>
 </html>

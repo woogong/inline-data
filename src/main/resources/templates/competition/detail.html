@@ -38,6 +38,7 @@
         .filters label { font-weight: 600; font-size: 0.9rem; }
         .empty { text-align: center; color: #999; padding: 2rem; }
     </style>
+    <style th:replace="~{fragments/athlete-modal :: styles}"></style>
 </head>
 <body>
     <div th:replace="~{fragments/header :: header}"></div>
@@ -122,9 +123,9 @@
                                    th:text="${e.eventName}"></a></td>
                             <td th:text="${e.gender == 'M' ? '남' : (e.gender == 'F' ? '여' : '혼성')}"></td>
                             <th:block th:with="m=${medals[e.id]}">
-                                <td th:title="${m?.gold}" th:text="${m?.gold != null and m.gold.length() > 10 ? m.gold.substring(0, 10) + '...' : m?.gold}"></td>
-                                <td th:title="${m?.silver}" th:text="${m?.silver != null and m.silver.length() > 10 ? m.silver.substring(0, 10) + '...' : m?.silver}"></td>
-                                <td th:title="${m?.bronze}" th:text="${m?.bronze != null and m.bronze.length() > 10 ? m.bronze.substring(0, 10) + '...' : m?.bronze}"></td>
+                                <td><span th:if="${m?.gold != null}" class="athlete-link" th:text="${m.gold.length() > 10 ? m.gold.substring(0, 10) + '...' : m.gold}" th:title="${m.gold}" th:attr="data-name=${m.gold}"></span></td>
+                                <td><span th:if="${m?.silver != null}" class="athlete-link" th:text="${m.silver.length() > 10 ? m.silver.substring(0, 10) + '...' : m.silver}" th:title="${m.silver}" th:attr="data-name=${m.silver}"></span></td>
+                                <td><span th:if="${m?.bronze != null}" class="athlete-link" th:text="${m.bronze.length() > 10 ? m.bronze.substring(0, 10) + '...' : m.bronze}" th:title="${m.bronze}" th:attr="data-name=${m.bronze}"></span></td>
                             </th:block>
                         </tr>
                     </tbody>
@@ -300,6 +301,8 @@
             <a th:href="@{/competitions}" class="btn btn-secondary">목록으로</a>
         </div>
     </main>
+
+    <div th:replace="~{fragments/athlete-modal :: modal(${competition.id})}"></div>
 
     <script th:if="${tab == 'events'}">
         const rows = document.querySelectorAll('#eventBody tr');

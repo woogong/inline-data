@@ -9,6 +9,7 @@ import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
+import org.springframework.web.bind.annotation.ResponseBody;
 
 @Controller
 @RequestMapping("/competitions")
@@ -43,5 +44,12 @@ public class CompetitionController {
             model.addAttribute("teamMedalStats", eventService.findTeamMedalStats(id));
         }
         return "competition/detail";
+    }
+
+    @GetMapping("/{id}/athlete-profile")
+    @ResponseBody
+    public EventService.AthleteProfileInfo athleteProfile(@PathVariable Long id,
+                                                          @RequestParam String name) {
+        return eventService.findAthleteProfile(id, name);
     }
 }

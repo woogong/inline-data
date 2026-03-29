@@ -61,6 +61,12 @@ public class EventService {
     public record ParticipantStats(int totalMale, int totalFemale, int totalAll,
                                    List<DivisionStat> divisionStats) {}
 
+    public record AthleteProfileInfo(String name, String region, String teamName, Long athleteId,
+                                     List<AthleteMedalRecord> medals) {}
+
+    public record AthleteMedalRecord(String competitionName, String divisionName, String eventName,
+                                     int ranking, String record) {}
+
     public List<Event> findByCompetitionId(Long competitionId) {
         return eventRepository.findByCompetitionIdOrderByFirstEventNumber(competitionId);
     }
@@ -528,5 +534,40 @@ public class EventService {
                     .note(note)
                     .build());
         }
+    }
+
+    public AthleteProfileInfo findAthleteProfile(Long competitionId, String athleteName) {
+        // 해당 대회의 CompetitionEntry에서 소속 정보 조회
+        List<CompetitionEntry> entries = competitionEntryRepository.findByCompetitionId(competitionId)
+                .stream().filter(ce -> athleteName.equals(ce.getAthleteName())).toList();
+
+        String region = null, teamName = null;
+        Long athleteId = null;
+        if (!entries.isEmpty()) {
+            CompetitionEntry entry = entries.getFirst();
+            region = entry.getRegion();
+            teamName = entry.getTeamName();
+            athleteId = entry.getAthlete() != null ? entry.getAthlete().getId() : null;
+        }
+
+        // 최근 메달 이력 조회 (결승 1~3위, 최근 5개 대회)
+        List<EventResult> allMedals = eventResultRepository.findMedalsByAthleteName(athleteName);
+
+        Set<Long> seenCompIds = new LinkedHashSet<>();
+        List<AthleteMedalRecord> medalRecords = new java.util.ArrayList<>();
+        for (EventResult er : allMedals) {
+            var comp = er.getHeatEntry().getEntry().getCompetition();
+            seenCompIds.add(comp.getId());
+            if (seenCompIds.size() > 5) break;
+
+            var round = er.getHeatEntry().getHeat().getEventRound();
+            var event = round.getEvent();
+            String baseName = comp.getShortName() != null ? comp.getShortName() : comp.getName();
+            String compName = (comp.getEdition() != null ? "제" + comp.getEdition() + "회 " : "") + baseName;
+            medalRecords.add(new AthleteMedalRecord(compName, event.getDivisionName(),
+                    event.getEventName(), er.getRanking(), er.getRecord()));
+        }
+
+        return new AthleteProfileInfo(athleteName, region, teamName, athleteId, medalRecords);
     }
 }

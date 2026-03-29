@@ -58,4 +58,17 @@ public interface EventResultRepository extends JpaRepository<EventResult, Long> 
            "AND er.newRecord IS NOT NULL " +
            "ORDER BY er.newRecord, e.divisionName, e.eventName, r.round")
     List<EventResult> findNewRecordsByCompetitionId(@Param("compId") Long competitionId);
+
+    @Query("SELECT er FROM EventResult er " +
+           "JOIN FETCH er.heatEntry he " +
+           "JOIN FETCH he.entry ce " +
+           "JOIN FETCH ce.competition c " +
+           "JOIN he.heat eh " +
+           "JOIN eh.eventRound r " +
+           "JOIN r.event e " +
+           "WHERE ce.athleteName = :athleteName " +
+           "AND r.round = '결승' " +
+           "AND er.ranking IN (1, 2, 3) " +
+           "ORDER BY c.startDate DESC, e.divisionName, e.eventName")
+    List<EventResult> findMedalsByAthleteName(@Param("athleteName") String athleteName);
 }
