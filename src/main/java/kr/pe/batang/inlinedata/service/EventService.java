@@ -46,7 +46,8 @@ public class EventService {
 
     public record DivisionStat(String division, int male, int female, int total) {}
 
-    public record RegionMedalStat(String region, int gold, int silver, int bronze, int total, int score) {}
+    public record RegionMedalStat(String region, int gold, int silver, int bronze, int total, int score,
+                                    int athletes, int athletesBGroup) {}
 
     public record AthleteAward(String athleteName, String divisionName, String eventName, int ranking) {}
 
@@ -212,7 +213,6 @@ public class EventService {
     public List<RegionMedalStat> findRegionMedalStats(Long competitionId) {
         List<EventResult> results = eventResultRepository.findScoringResultsByCompetitionId(competitionId);
 
-        // region → {gold, silver, bronze, score}
         Map<String, int[]> regionData = new LinkedHashMap<>(); // [gold, silver, bronze, score]
 
         for (EventResult er : results) {
@@ -226,30 +226,48 @@ public class EventService {
             int[] data = regionData.computeIfAbsent(region, k -> new int[4]);
             int ranking = er.getRanking();
 
-            // 메달 집계 (1~3위)
             if (ranking == 1) data[0]++;
             else if (ranking == 2) data[1]++;
             else if (ranking == 3) data[2]++;
 
-            // 점수 (B조 제외)
             if (!isBGroup) {
                 int score = switch (ranking) {
-                    case 1 -> 7;
-                    case 2 -> 5;
-                    case 3 -> 4;
-                    case 4 -> 3;
-                    case 5 -> 2;
-                    case 6 -> 1;
+                    case 1 -> 7; case 2 -> 5; case 3 -> 4;
+                    case 4 -> 3; case 5 -> 2; case 6 -> 1;
                     default -> 0;
                 };
                 data[3] += score;
             }
         }
 
-        return regionData.entrySet().stream()
-                .map(e -> {
-                    int[] d = e.getValue();
-                    return new RegionMedalStat(e.getKey(), d[0], d[1], d[2], d[0] + d[1] + d[2], d[3]);
+        // 지역별 참가 선수 수 집계 (개인전만)
+        List<CompetitionEntry> allEntries = competitionEntryRepository.findIndividualEntriesWithAthlete(competitionId);
+        Map<String, int[]> regionAthletes = new LinkedHashMap<>(); // [일반, B조]
+        for (CompetitionEntry ce : allEntries) {
+            String region = ce.getRegion();
+            if (region == null || region.isBlank()) continue;
+            int[] counts = regionAthletes.computeIfAbsent(region, k -> new int[2]);
+            // B조 여부 확인
+            try {
+                List<HeatEntry> heatEntries = heatEntryRepository.findByEntryId(ce.getId());
+                boolean isBGroup = heatEntries.stream()
+                        .anyMatch(he -> he.getHeat().getEventRound().getEvent().getDivisionName().contains("일반(B조)"));
+                if (isBGroup) counts[1]++; else counts[0]++;
+            } catch (Exception ignored) {
+                counts[0]++;
+            }
+        }
+
+        // 모든 지역 통합 (메달 없지만 선수가 있는 지역 포함)
+        Set<String> allRegions = new LinkedHashSet<>();
+        allRegions.addAll(regionData.keySet());
+        allRegions.addAll(regionAthletes.keySet());
+
+        return allRegions.stream()
+                .map(region -> {
+                    int[] d = regionData.getOrDefault(region, new int[4]);
+                    int[] a = regionAthletes.getOrDefault(region, new int[2]);
+                    return new RegionMedalStat(region, d[0], d[1], d[2], d[0] + d[1] + d[2], d[3], a[0], a[1]);
                 })
                 .sorted(Comparator.comparingInt((RegionMedalStat r) -> -r.score()))
                 .toList();

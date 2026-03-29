@@ -221,6 +221,8 @@
                     <tr>
                         <th>순위</th>
                         <th>지역</th>
+                        <th style="text-align:center">선수</th>
+                        <th style="text-align:center">B조</th>
                         <th style="text-align:center">&#x1F947;</th>
                         <th style="text-align:center">&#x1F948;</th>
                         <th style="text-align:center">&#x1F949;</th>
@@ -232,6 +234,8 @@
                     <tr th:each="r, iter : ${regionMedalStats}">
                         <td th:text="${iter.count}"></td>
                         <td th:text="${r.region}"></td>
+                        <td style="text-align:center;" th:text="${r.athletes}"></td>
+                        <td style="text-align:center; color:#888;" th:text="${r.athletesBGroup > 0 ? r.athletesBGroup : ''}"></td>
                         <td style="text-align:center; font-weight:600;" th:text="${r.gold > 0 ? r.gold : ''}"></td>
                         <td style="text-align:center; font-weight:600;" th:text="${r.silver > 0 ? r.silver : ''}"></td>
                         <td style="text-align:center; font-weight:600;" th:text="${r.bronze > 0 ? r.bronze : ''}"></td>
