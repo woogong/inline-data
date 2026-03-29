@@ -103,6 +103,13 @@ public class ResultParsingService {
         for (ParsedResult pr : results) {
             HeatEntry heatEntry = entryByBib.get(pr.bibNumber);
 
+            // 단체전: bib 매칭 실패 시 팀명(athleteName)으로 매칭
+            if (heatEntry == null && isTeamEvent && pr.athleteName != null) {
+                heatEntry = existingEntries.stream()
+                        .filter(he -> pr.athleteName.equals(he.getEntry().getAthleteName()))
+                        .findFirst().orElse(null);
+            }
+
             // HeatEntry가 없으면 → 엔트리 자동 생성
             if (heatEntry == null && pr.athleteName != null) {
                 CompetitionEntry compEntry = findOrCreateCompetitionEntry(
@@ -128,7 +135,7 @@ public class ResultParsingService {
         }
 
         // DTT 종목이면 전체 기록 순으로 순위 재계산
-        if (!isTeamEvent && targetRound.getEvent().getEventName().contains("DTT")) {
+        if (targetRound.getEvent().getEventName().contains("DTT")) {
             recalculateDttRankings(targetRound.getId());
         }
 
@@ -310,9 +317,20 @@ public class ResultParsingService {
                 try { ranking = Integer.parseInt(rankStr); } catch (NumberFormatException ignored) {}
 
                 // rest: "대구성산중학교         대구          Q     4:55.912"
+                // 또는: "전북특별자치도롤러스포츠연맹 전북                 4:35.053" (공백 1개)
                 String[] parts = rest.split("\\s{2,}");
-                String teamEntryName = parts.length >= 1 ? parts[0].trim() : null; // 팀명 = athleteName
+                String teamEntryName = parts.length >= 1 ? parts[0].trim() : null;
                 String region = parts.length >= 2 ? parts[1].trim() : null;
+
+                // 팀명과 시도가 공백 1개로 붙어있는 경우 분리
+                // 시도는 2~3글자 한글 (서울, 부산, 경기, 전북, 충남 등)
+                if (teamEntryName != null && region == null) {
+                    Matcher regionSuffix = Pattern.compile("^(.+?)\\s+([가-힣]{2,3})$").matcher(teamEntryName);
+                    if (regionSuffix.matches()) {
+                        teamEntryName = regionSuffix.group(1).trim();
+                        region = regionSuffix.group(2);
+                    }
+                }
 
                 String record = null, newRecord = null, qualification = null, note = null;
 
