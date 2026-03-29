@@ -99,8 +99,9 @@ public class AthleteService {
         for (CompetitionEntry ce : entries) {
             try {
                 List<HeatEntry> heatEntries = heatEntryRepository.findByEntryId(ce.getId());
-                String compName = ce.getCompetition().getShortName() != null
-                        ? ce.getCompetition().getShortName() : ce.getCompetition().getName();
+                var comp = ce.getCompetition();
+                String baseName = comp.getShortName() != null ? comp.getShortName() : comp.getName();
+                String compName = (comp.getEdition() != null ? "제" + comp.getEdition() + "회 " : "") + baseName;
                 for (HeatEntry he : heatEntries) {
                     var round = he.getHeat().getEventRound();
                     var event = round.getEvent();

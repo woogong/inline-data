@@ -122,9 +122,9 @@
                                    th:text="${e.eventName}"></a></td>
                             <td th:text="${e.gender == 'M' ? '남' : (e.gender == 'F' ? '여' : '혼성')}"></td>
                             <th:block th:with="m=${medals[e.id]}">
-                                <td th:text="${m?.gold}"></td>
-                                <td th:text="${m?.silver}"></td>
-                                <td th:text="${m?.bronze}"></td>
+                                <td th:title="${m?.gold}" th:text="${m?.gold != null and m.gold.length() > 10 ? m.gold.substring(0, 10) + '...' : m?.gold}"></td>
+                                <td th:title="${m?.silver}" th:text="${m?.silver != null and m.silver.length() > 10 ? m.silver.substring(0, 10) + '...' : m?.silver}"></td>
+                                <td th:title="${m?.bronze}" th:text="${m?.bronze != null and m.bronze.length() > 10 ? m.bronze.substring(0, 10) + '...' : m?.bronze}"></td>
                             </th:block>
                         </tr>
                     </tbody>
