@@ -53,6 +53,13 @@ public class AdminEventController {
         return "admin/event/list";
     }
 
+    @PostMapping("/recalculate-dtt")
+    @ResponseBody
+    public Map<String, Object> recalculateDtt(@PathVariable Long compId) {
+        int count = eventService.recalculateAllDttRankings(compId);
+        return Map.of("status", "ok", "recalculated", count);
+    }
+
     @PostMapping("/bulk-register")
     @ResponseBody
     public Map<String, Object> bulkRegister(@PathVariable Long compId) {

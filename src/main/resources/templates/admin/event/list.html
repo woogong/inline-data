@@ -45,6 +45,7 @@
                 <button type="submit" class="btn btn-primary">조편성 PDF 가져오기</button>
             </form>
             <button class="btn btn-success" onclick="doBulkRegister()">선수/팀 일괄 등록</button>
+            <button class="btn btn-primary" onclick="doRecalculateDtt()">DTT 순위 재계산</button>
             <a th:href="@{/admin/competitions/{compId}/mapping(compId=${competition.id})}" class="btn btn-primary">선수 매핑</a>
             <a th:href="@{/admin/competitions/{id}(id=${competition.id})}" class="btn btn-secondary">대회로 돌아가기</a>
         </div>
@@ -113,6 +114,16 @@
 
         const RESULT_IMPORT_URL = /*[[@{/admin/competitions/{compId}/events/import-result(compId=${competition.id})}]]*/ '';
         const BULK_REGISTER_URL = /*[[@{/admin/competitions/{compId}/events/bulk-register(compId=${competition.id})}]]*/ '';
+
+        const DTT_RECALC_URL = /*[[@{/admin/competitions/{compId}/events/recalculate-dtt(compId=${competition.id})}]]*/ '';
+
+        function doRecalculateDtt() {
+            if (!confirm('DTT 종목의 순위를 전체 기록 순으로 재계산합니다.')) return;
+            fetch(DTT_RECALC_URL, { method: 'POST' })
+                .then(r => r.json())
+                .then(data => alert('DTT 순위 재계산 완료: ' + data.recalculated + '건'))
+                .catch(err => alert('오류: ' + err.message));
+        }
 
         function doBulkRegister() {
             if (!confirm('개인전 엔트리를 기반으로 선수와 팀을 일괄 등록합니다.\n이미 등록된 항목은 건너뜁니다.\n\n진행하시겠습니까?')) return;
