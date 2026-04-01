@@ -13,6 +13,9 @@ import org.springframework.web.bind.annotation.ModelAttribute;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RequestParam;
+import org.springframework.web.multipart.MultipartFile;
+import org.springframework.web.servlet.mvc.support.RedirectAttributes;
 
 @Controller
 @RequestMapping("/admin/competitions")
@@ -52,6 +55,7 @@ public class AdminCompetitionController {
     public String editForm(@PathVariable Long id, Model model) {
         Competition competition = competitionService.findById(id);
         model.addAttribute("dto", CompetitionFormDto.from(competition));
+        model.addAttribute("competition", competition);
         return "admin/competition/form";
     }
 
@@ -62,6 +66,24 @@ public class AdminCompetitionController {
         }
         competitionService.update(id, dto);
         return "redirect:/admin/competitions/" + id;
+    }
+
+    @PostMapping("/{id}/image")
+    public String uploadImage(@PathVariable Long id, @RequestParam("imageFile") MultipartFile file,
+                              RedirectAttributes redirectAttributes) {
+        if (file.isEmpty()) {
+            redirectAttributes.addFlashAttribute("imageError", "파일을 선택해주세요.");
+            return "redirect:/admin/competitions/" + id + "/edit";
+        }
+        competitionService.saveImage(id, file);
+        redirectAttributes.addFlashAttribute("imageSuccess", "이미지가 업로드되었습니다.");
+        return "redirect:/admin/competitions/" + id + "/edit";
+    }
+
+    @PostMapping("/{id}/image/delete")
+    public String deleteImage(@PathVariable Long id) {
+        competitionService.deleteImage(id);
+        return "redirect:/admin/competitions/" + id + "/edit";
     }
 
     @PostMapping("/{id}/delete")

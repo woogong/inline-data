@@ -24,3 +24,7 @@ spring:
       hibernate:
         format_sql: true
     open-in-view: false
+
+app:
+  upload:
+    dir: /Users/batang/Developments/files/inlinedata

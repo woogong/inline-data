@@ -61,6 +61,9 @@ public class Competition {
     @Column(columnDefinition = "TEXT")
     private String notes;
 
+    @Column(length = 500)
+    private String imagePath;
+
     @CreatedDate
     @Column(updatable = false)
     private LocalDateTime createdAt;
@@ -99,5 +102,9 @@ public class Competition {
         this.host = host;
         this.organizer = organizer;
         this.notes = notes;
+    }
+
+    public void updateImagePath(String imagePath) {
+        this.imagePath = imagePath;
     }
 }

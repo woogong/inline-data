@@ -15,15 +15,25 @@ import kr.pe.batang.inlinedata.repository.EventResultRepository;
 import kr.pe.batang.inlinedata.repository.EventRoundRepository;
 import kr.pe.batang.inlinedata.repository.HeatEntryRepository;
 import lombok.RequiredArgsConstructor;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.web.multipart.MultipartFile;
 
+import java.io.IOException;
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.nio.file.Paths;
 import java.util.List;
+import java.util.UUID;
 
 @Service
 @RequiredArgsConstructor
 @Transactional(readOnly = true)
 public class CompetitionService {
+
+    @Value("${app.upload.dir:uploads}")
+    private String uploadDir;
 
     private final CompetitionRepository competitionRepository;
     private final EventRepository eventRepository;
@@ -67,6 +77,51 @@ public class CompetitionService {
     }
 
     @Transactional
+    public void saveImage(Long id, MultipartFile file) {
+        Competition competition = findById(id);
+
+        // 기존 이미지 삭제
+        if (competition.getImagePath() != null) {
+            deleteImageFile(competition.getImagePath());
+        }
+
+        try {
+            Path dir = Paths.get(uploadDir, "competitions");
+            Files.createDirectories(dir);
+
+            String originalName = file.getOriginalFilename();
+            String ext = (originalName != null && originalName.contains("."))
+                    ? originalName.substring(originalName.lastIndexOf('.'))
+                    : ".jpg";
+            String fileName = UUID.randomUUID() + ext;
+            Path filePath = dir.resolve(fileName).toAbsolutePath();
+            file.transferTo(filePath.toFile());
+
+            competition.updateImagePath("competitions/" + fileName);
+        } catch (IOException e) {
+            throw new RuntimeException("이미지 저장에 실패했습니다.", e);
+        }
+    }
+
+    @Transactional
+    public void deleteImage(Long id) {
+        Competition competition = findById(id);
+        if (competition.getImagePath() != null) {
+            deleteImageFile(competition.getImagePath());
+            competition.updateImagePath(null);
+        }
+    }
+
+    private void deleteImageFile(String imagePath) {
+        try {
+            Path path = Paths.get(uploadDir, imagePath);
+            Files.deleteIfExists(path);
+        } catch (IOException e) {
+            // ignore
+        }
+    }
+
+    @Transactional
     public void delete(Long id) {
         Competition competition = findById(id);
         List<Event> events = eventRepository.findByCompetitionIdOrderByFirstEventNumber(id);
@@ -81,6 +136,9 @@ public class CompetitionService {
             heatEntryRepository.deleteAll(heatEntryRepository.findByEntryId(ce.getId()));
         }
         competitionEntryRepository.deleteAll(entries);
+        if (competition.getImagePath() != null) {
+            deleteImageFile(competition.getImagePath());
+        }
         competitionRepository.delete(competition);
     }
 

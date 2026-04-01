@@ -2,16 +2,20 @@ package kr.pe.batang.inlinedata.service;
 
 import kr.pe.batang.inlinedata.entity.Athlete;
 import kr.pe.batang.inlinedata.entity.CompetitionEntry;
+import kr.pe.batang.inlinedata.entity.HeatEntry;
 import kr.pe.batang.inlinedata.entity.Team;
 import kr.pe.batang.inlinedata.repository.AthleteRepository;
 import kr.pe.batang.inlinedata.repository.CompetitionEntryRepository;
+import kr.pe.batang.inlinedata.repository.HeatEntryRepository;
 import kr.pe.batang.inlinedata.repository.TeamRepository;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import java.util.stream.Collectors;
 
 @Service
@@ -22,8 +26,57 @@ public class MappingService {
     private final CompetitionEntryRepository entryRepository;
     private final AthleteRepository athleteRepository;
     private final TeamRepository teamRepository;
+    private final HeatEntryRepository heatEntryRepository;
 
-    public record HistoryDto(String competitionName, String teamName, String region, Integer grade) {}
+    /**
+     * 부별명을 계열로 정규화한다.
+     * 초등/중등/고등/대일 4가지 계열로 분류.
+     */
+    static String normalizeDivision(String divisionName) {
+        if (divisionName == null) return "";
+        if (divisionName.contains("초")) return "초등";
+        if (divisionName.contains("중")) return "중등";
+        if (divisionName.contains("고")) return "고등";
+        // 대학, 일반, 대일 → 대일
+        return "대일";
+    }
+
+    /**
+     * 엔트리가 출전한 종목의 부별 계열 집합을 반환한다.
+     */
+    private Set<String> getDivisionCategories(Long entryId) {
+        return heatEntryRepository.findByEntryId(entryId).stream()
+                .map(he -> normalizeDivision(he.getHeat().getEventRound().getEvent().getDivisionName()))
+                .collect(Collectors.toSet());
+    }
+
+    /**
+     * 엔트리 ID → 부별 계열을 일괄 조회하여 캐시 맵을 만든다.
+     */
+    private Map<Long, Set<String>> buildDivisionCache(List<CompetitionEntry> entries) {
+        Map<Long, Set<String>> cache = new HashMap<>();
+        for (CompetitionEntry ce : entries) {
+            cache.put(ce.getId(), getDivisionCategories(ce.getId()));
+        }
+        return cache;
+    }
+
+    public record HistoryDto(String competitionName, String teamName, String region, Integer grade,
+                             String divisions, String events) {}
+
+    private HistoryDto toHistoryDto(CompetitionEntry ce) {
+        String compName = ce.getCompetition().getShortName() != null
+                ? ce.getCompetition().getShortName() : ce.getCompetition().getName();
+        List<HeatEntry> heatEntries = heatEntryRepository.findByEntryId(ce.getId());
+        String divisions = heatEntries.stream()
+                .map(he -> he.getHeat().getEventRound().getEvent().getDivisionName())
+                .distinct().sorted().collect(Collectors.joining(", "));
+        String events = heatEntries.stream()
+                .map(he -> he.getHeat().getEventRound().getEvent().getEventName())
+                .distinct().sorted().collect(Collectors.joining(", "));
+        return new HistoryDto(compName, ce.getTeamName(), ce.getRegion(), ce.getGrade(),
+                divisions.isEmpty() ? null : divisions, events.isEmpty() ? null : events);
+    }
 
     public record CandidateDto(
             Long athleteId, String name, String gender, Integer birthYear, String notes,
@@ -44,12 +97,7 @@ public class MappingService {
                 .map(athlete -> {
                     List<CompetitionEntry> historyEntries = entryRepository.findByAthleteId(athlete.getId());
                     List<HistoryDto> history = historyEntries.stream()
-                            .map(he -> new HistoryDto(
-                                    he.getCompetition().getName(),
-                                    he.getTeamName(),
-                                    he.getRegion(),
-                                    he.getGrade()
-                            ))
+                            .map(this::toHistoryDto)
                             .toList();
                     return new CandidateDto(
                             athlete.getId(),
@@ -72,44 +120,52 @@ public class MappingService {
         List<CompetitionEntry> unmapped = entryRepository.findIndividualUnmappedEntries(competitionId);
         int matched = 0;
 
-        // Group by name+gender+teamName: 소속이 다르면 다른 선수로 판단
+        Map<Long, Set<String>> divCache = buildDivisionCache(unmapped);
+
+        // Group by name+gender+teamName+부별계열
         Map<String, List<CompetitionEntry>> grouped = unmapped.stream()
-                .collect(Collectors.groupingBy(e ->
-                        e.getAthleteName() + "|" + e.getGender() + "|" + (e.getTeamName() != null ? e.getTeamName() : "")));
+                .collect(Collectors.groupingBy(e -> {
+                    String team = e.getTeamName() != null ? e.getTeamName() : "";
+                    String divKey = divCache.getOrDefault(e.getId(), Set.of()).stream()
+                            .sorted().collect(Collectors.joining(","));
+                    return e.getAthleteName() + "|" + e.getGender() + "|" + team + "|" + divKey;
+                }));
 
         for (Map.Entry<String, List<CompetitionEntry>> group : grouped.entrySet()) {
-            List<CompetitionEntry> entries = group.getValue();
-            CompetitionEntry sample = entries.getFirst();
+            List<CompetitionEntry> groupEntries = group.getValue();
+            CompetitionEntry sample = groupEntries.getFirst();
             String sampleTeam = sample.getTeamName() != null ? sample.getTeamName() : "";
+            Set<String> sampleDivs = divCache.getOrDefault(sample.getId(), Set.of());
 
             List<Athlete> candidates = athleteRepository.findByNameAndGender(
                     sample.getAthleteName(), sample.getGender());
 
-            Athlete athlete;
             if (candidates.isEmpty()) {
-                // 기존 Athlete 없음 → 새로 생성
-                athlete = athleteRepository.save(Athlete.builder()
-                        .name(sample.getAthleteName())
-                        .gender(sample.getGender())
-                        .build());
-            } else {
-                // 같은 팀으로 매핑된 이력이 있는 후보 필터
-                List<Athlete> teamMatched = candidates.stream()
-                        .filter(a -> entryRepository.findByAthleteId(a.getId()).stream()
-                                .anyMatch(he -> sampleTeam.equals(he.getTeamName() != null ? he.getTeamName() : "")))
-                        .toList();
+                continue; // autoMatch에서는 신규 생성하지 않음 → bulkRegister에서 처리
+            }
 
-                if (teamMatched.size() == 1) {
-                    athlete = teamMatched.getFirst();
-                } else {
-                    continue; // 팀 매칭 불가 또는 동명이인 → 수동 매핑
+            // 같은 팀 + 호환 부별 후보 필터
+            List<Athlete> teamMatched = candidates.stream()
+                    .filter(a -> {
+                        List<CompetitionEntry> aEntries = entryRepository.findByAthleteId(a.getId());
+                        return !aEntries.isEmpty() && aEntries.stream().anyMatch(he -> {
+                            boolean teamMatch = sampleTeam.equals(he.getTeamName() != null ? he.getTeamName() : "");
+                            Set<String> heDivs = getDivisionCategories(he.getId());
+                            boolean divMatch = sampleDivs.isEmpty() || heDivs.isEmpty()
+                                    || sampleDivs.stream().anyMatch(heDivs::contains);
+                            return teamMatch && divMatch;
+                        });
+                    })
+                    .toList();
+
+            if (teamMatched.size() == 1) {
+                Athlete athlete = teamMatched.getFirst();
+                for (CompetitionEntry entry : groupEntries) {
+                    entry.mapAthlete(athlete);
+                    matched++;
                 }
             }
-
-            for (CompetitionEntry entry : entries) {
-                entry.mapAthlete(athlete);
-                matched++;
-            }
+            // 매칭 불가 또는 동명이인 → 수동 매핑
         }
 
         return matched;
@@ -225,6 +281,55 @@ public class MappingService {
         entry.unmapTeam();
     }
 
+    // ===== 동명이인 후보 =====
+
+    public record DuplicateCandidateDto(Long athleteId, String name, String gender, String notes,
+                                        List<HistoryDto> history) {}
+
+    public record DuplicateGroupDto(String name, String gender, List<DuplicateCandidateDto> athletes) {}
+
+    public List<DuplicateGroupDto> findDuplicateCandidates() {
+        // 이름+성별이 같은 athlete가 2명 이상인 그룹 조회
+        List<Athlete> allAthletes = athleteRepository.findAll();
+        Map<String, List<Athlete>> grouped = allAthletes.stream()
+                .collect(Collectors.groupingBy(a -> a.getName() + "|" + a.getGender()));
+
+        return grouped.entrySet().stream()
+                .filter(e -> e.getValue().size() >= 2)
+                .map(e -> {
+                    List<Athlete> athletes = e.getValue();
+                    String name = athletes.getFirst().getName();
+                    String gender = athletes.getFirst().getGender();
+                    List<DuplicateCandidateDto> candidates = athletes.stream()
+                            .map(a -> {
+                                List<CompetitionEntry> entries = entryRepository.findByAthleteId(a.getId());
+                                List<HistoryDto> history = entries.stream()
+                                        .map(this::toHistoryDto)
+                                        .toList();
+                                return new DuplicateCandidateDto(a.getId(), a.getName(), a.getGender(), a.getNotes(), history);
+                            })
+                            .toList();
+                    return new DuplicateGroupDto(name, gender, candidates);
+                })
+                .sorted((a, b) -> a.name().compareTo(b.name()))
+                .toList();
+    }
+
+    @Transactional
+    public void mergeAthletes(Long keepId, Long removeId) {
+        Athlete keep = athleteRepository.findById(keepId)
+                .orElseThrow(() -> new IllegalArgumentException("선수를 찾을 수 없습니다. id=" + keepId));
+        Athlete remove = athleteRepository.findById(removeId)
+                .orElseThrow(() -> new IllegalArgumentException("선수를 찾을 수 없습니다. id=" + removeId));
+
+        // 삭제 대상의 모든 엔트리를 유지 대상으로 재매핑
+        List<CompetitionEntry> entries = entryRepository.findByAthleteId(removeId);
+        for (CompetitionEntry entry : entries) {
+            entry.mapAthlete(keep);
+        }
+        athleteRepository.delete(remove);
+    }
+
     // ===== 일괄 등록 =====
 
     public record BulkRegisterResult(int teamsCreated, int teamsMapped, int athletesCreated, int athletesMapped) {}
@@ -255,36 +360,48 @@ public class MappingService {
             }
         }
 
-        // 2. Athlete 등록+매핑 (이름+성별+팀명으로 그룹화, 기존 매핑 보정 포함)
+        // 2. Athlete 등록+매핑 (이름+성별+팀명+부별계열로 그룹화)
+        // 엔트리별 부별 계열 캐시
+        Map<Long, Set<String>> divCache = buildDivisionCache(entries);
+
+        // 그룹화 키: 이름|성별|팀명|부별계열(정렬된 문자열)
         Map<String, List<CompetitionEntry>> athleteGroups = entries.stream()
-                .collect(Collectors.groupingBy(e ->
-                        e.getAthleteName() + "|" + e.getGender() + "|" + (e.getTeamName() != null ? e.getTeamName() : "")));
+                .collect(Collectors.groupingBy(e -> {
+                    String team = e.getTeamName() != null ? e.getTeamName() : "";
+                    Set<String> divs = divCache.getOrDefault(e.getId(), Set.of());
+                    String divKey = divs.stream().sorted().collect(Collectors.joining(","));
+                    return e.getAthleteName() + "|" + e.getGender() + "|" + team + "|" + divKey;
+                }));
 
         for (Map.Entry<String, List<CompetitionEntry>> group : athleteGroups.entrySet()) {
             List<CompetitionEntry> ces = group.getValue();
             CompetitionEntry sample = ces.getFirst();
             String sampleTeam = sample.getTeamName() != null ? sample.getTeamName() : "";
+            Set<String> sampleDivs = divCache.getOrDefault(sample.getId(), Set.of());
 
-            // 같은 이름+성별+팀명 그룹에서 올바른 Athlete 결정
+            // 같은 이름+성별+팀명+부별 그룹에서 올바른 Athlete 결정
             Athlete correctAthlete = null;
 
-            // 이미 이 그룹에 매핑된 athlete가 있고, 그 athlete의 모든 엔트리가 같은 팀이면 사용
+            // 이미 매핑된 athlete가 있고, 팀+부별이 호환되면 사용
             for (CompetitionEntry ce : ces) {
                 if (ce.getAthlete() != null) {
                     List<CompetitionEntry> existingEntries = entryRepository.findByAthleteId(ce.getAthlete().getId());
-                    // 해당 athlete의 모든 엔트리가 같은 팀인지 확인
-                    boolean allSameTeam = existingEntries.stream()
-                            .allMatch(he -> sampleTeam.equals(he.getTeamName() != null ? he.getTeamName() : ""));
-                    if (allSameTeam) {
+                    boolean allCompatible = existingEntries.stream().allMatch(he -> {
+                        boolean teamMatch = sampleTeam.equals(he.getTeamName() != null ? he.getTeamName() : "");
+                        Set<String> heDivs = divCache.containsKey(he.getId())
+                                ? divCache.get(he.getId()) : getDivisionCategories(he.getId());
+                        boolean divMatch = sampleDivs.isEmpty() || heDivs.isEmpty()
+                                || sampleDivs.stream().anyMatch(heDivs::contains);
+                        return teamMatch && divMatch;
+                    });
+                    if (allCompatible) {
                         correctAthlete = ce.getAthlete();
                         break;
                     }
-                    // 다른 팀 엔트리가 섞여 있으면 잘못된 매핑 → 기존 매핑 무시하고 새로 판단
                 }
             }
 
             if (correctAthlete == null) {
-                // 기존 Athlete 검색
                 List<Athlete> candidates = athleteRepository.findByNameAndGender(sample.getAthleteName(), sample.getGender());
 
                 if (candidates.isEmpty()) {
@@ -294,18 +411,23 @@ public class MappingService {
                             .build());
                     athletesCreated++;
                 } else {
-                    // 같은 팀으로만 매핑된 후보 검색 (다른 팀이 섞여 있으면 제외)
-                    List<Athlete> teamMatched = candidates.stream()
+                    // 같은 팀 + 호환 부별로 매핑된 후보 검색
+                    List<Athlete> matched = candidates.stream()
                             .filter(a -> {
                                 List<CompetitionEntry> aEntries = entryRepository.findByAthleteId(a.getId());
-                                return !aEntries.isEmpty() && aEntries.stream()
-                                        .allMatch(he -> sampleTeam.equals(he.getTeamName() != null ? he.getTeamName() : ""));
+                                if (aEntries.isEmpty()) return false;
+                                return aEntries.stream().allMatch(he -> {
+                                    boolean teamMatch = sampleTeam.equals(he.getTeamName() != null ? he.getTeamName() : "");
+                                    Set<String> heDivs = getDivisionCategories(he.getId());
+                                    boolean divMatch = sampleDivs.isEmpty() || heDivs.isEmpty()
+                                            || sampleDivs.stream().anyMatch(heDivs::contains);
+                                    return teamMatch && divMatch;
+                                });
                             })
                             .toList();
-                    if (teamMatched.size() == 1) {
-                        correctAthlete = teamMatched.getFirst();
+                    if (matched.size() == 1) {
+                        correctAthlete = matched.getFirst();
                     } else {
-                        // 새 Athlete 생성
                         String note = sample.getRegion() != null ? sample.getRegion() + " " + sampleTeam : sampleTeam;
                         correctAthlete = athleteRepository.save(Athlete.builder()
                                 .name(sample.getAthleteName())
@@ -317,7 +439,6 @@ public class MappingService {
                 }
             }
 
-            // 매핑 적용 (잘못된 매핑 보정 포함)
             for (CompetitionEntry ce : ces) {
                 if (ce.getAthlete() == null || !ce.getAthlete().getId().equals(correctAthlete.getId())) {
                     ce.mapAthlete(correctAthlete);

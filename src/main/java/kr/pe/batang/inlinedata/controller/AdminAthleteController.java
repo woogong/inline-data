@@ -5,6 +5,7 @@ import jakarta.validation.Valid;
 import kr.pe.batang.inlinedata.entity.Athlete;
 import kr.pe.batang.inlinedata.service.AthleteService;
 import kr.pe.batang.inlinedata.service.EntryParsingService;
+import kr.pe.batang.inlinedata.service.MappingService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Controller;
@@ -14,10 +15,15 @@ import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.ModelAttribute;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
+import org.springframework.web.bind.annotation.ResponseBody;
 import org.springframework.web.multipart.MultipartFile;
 import org.springframework.web.servlet.mvc.support.RedirectAttributes;
+
+import java.util.List;
+import java.util.Map;
 
 import java.nio.file.Files;
 import java.nio.file.Path;
@@ -30,6 +36,7 @@ public class AdminAthleteController {
 
     private final AthleteService athleteService;
     private final EntryParsingService entryParsingService;
+    private final MappingService mappingService;
 
     @GetMapping
     public String list(@RequestParam(required = false) String name,
@@ -102,6 +109,19 @@ public class AdminAthleteController {
     public String deleteForce(@PathVariable Long id) {
         athleteService.deleteForce(id);
         return "redirect:/admin/athletes";
+    }
+
+    @GetMapping("/duplicates")
+    public String duplicates(Model model) {
+        model.addAttribute("groups", mappingService.findDuplicateCandidates());
+        return "admin/athlete/duplicates";
+    }
+
+    @PostMapping("/merge")
+    @ResponseBody
+    public Map<String, String> merge(@RequestBody Map<String, Long> body) {
+        mappingService.mergeAthletes(body.get("keepId"), body.get("removeId"));
+        return Map.of("status", "ok");
     }
 
     @PostMapping("/import")

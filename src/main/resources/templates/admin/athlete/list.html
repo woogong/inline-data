@@ -32,6 +32,7 @@
         <div th:if="${errorMessage}" style="padding:0.8rem; margin:0.5rem 0; background:#f8d7da; color:#721c24; border:1px solid #f5c6cb; border-radius:4px;" th:text="${errorMessage}"></div>
         <div class="actions" style="display:flex; gap:1rem; align-items:center; flex-wrap:wrap;">
             <a th:href="@{/admin/athletes/new}" class="btn btn-primary">선수 등록</a>
+            <a th:href="@{/admin/athletes/duplicates}" class="btn btn-primary">동명이인 관리</a>
             <form th:action="@{/admin/athletes/import}" method="post" enctype="multipart/form-data" style="display:flex; gap:0.5rem; align-items:center;">
                 <input type="file" name="file" accept=".pdf" required style="font-size:0.9rem;">
                 <button type="submit" class="btn btn-primary">엔트리에서 가져오기</button>

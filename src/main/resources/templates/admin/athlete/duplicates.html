@@ -1,0 +1,139 @@
+<!DOCTYPE html>
+<html xmlns:th="http://www.thymeleaf.org">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>동명이인 관리 - InlineData</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; color: #333; line-height: 1.6; }
+        .container { max-width: 960px; margin: 0 auto; padding: 0 1rem; }
+        nav { background: #2c3e50; color: #fff; padding: 0.8rem 0; }
+        nav a { color: #ecf0f1; text-decoration: none; margin-right: 1.5rem; }
+        nav a:hover { color: #fff; text-decoration: underline; }
+        nav .nav-brand { font-weight: bold; font-size: 1.1rem; }
+        main { padding: 1.5rem 0; }
+        .btn { display: inline-block; padding: 0.3rem 0.8rem; border: none; border-radius: 4px; cursor: pointer; text-decoration: none; font-size: 0.85rem; }
+        .btn-danger { background: #e74c3c; color: #fff; }
+        .btn-danger:hover { background: #c0392b; }
+        .btn-secondary { background: #95a5a6; color: #fff; }
+        .btn-secondary:hover { background: #7f8c8d; }
+        .group { border: 1px solid #ddd; border-radius: 6px; padding: 1rem; margin: 1rem 0; }
+        .group h3 { font-size: 1rem; margin-bottom: 0.5rem; }
+        .athlete-card { display: flex; justify-content: space-between; align-items: flex-start; padding: 0.5rem 0.8rem; margin: 0.3rem 0; background: #f9f9f9; border-radius: 4px; border: 1px solid #eee; }
+        .athlete-info { flex: 1; }
+        .athlete-id { color: #888; font-size: 0.8rem; }
+        .history-item { font-size: 0.85rem; color: #555; margin-left: 1rem; }
+        .empty { text-align: center; color: #999; padding: 2rem; }
+        .actions { margin: 1rem 0; }
+        .count-badge { background: #e74c3c; color: #fff; border-radius: 10px; padding: 0.1rem 0.5rem; font-size: 0.8rem; margin-left: 0.5rem; }
+        .btn-merge { background: #27ae60; color: #fff; }
+        .btn-merge:hover { background: #219a52; }
+        .merge-bar { display: none; margin-top: 0.5rem; padding: 0.5rem; background: #eafaf1; border: 1px solid #27ae60; border-radius: 4px; }
+        .merge-bar.active { display: flex; align-items: center; gap: 0.5rem; }
+        .merge-check { width: 16px; height: 16px; cursor: pointer; flex-shrink: 0; }
+    </style>
+</head>
+<body>
+    <div th:replace="~{fragments/header :: header}"></div>
+    <main class="container">
+        <h1>동명이인 관리 <span class="count-badge" th:text="${groups.size()}"></span></h1>
+        <p style="color:#666; font-size:0.9rem; margin:0.5rem 0;">이름과 성별이 같지만 별도의 선수로 등록된 목록입니다. 같은 선수라면 병합할 수 있습니다.</p>
+
+        <div class="actions">
+            <a th:href="@{/admin/athletes}" class="btn btn-secondary">선수 관리로 돌아가기</a>
+        </div>
+
+        <div th:if="${groups.isEmpty()}" class="empty">동명이인이 없습니다.</div>
+
+        <div th:each="g : ${groups}" class="group">
+            <h3>
+                <span th:text="${g.name}"></span>
+                <span th:text="${g.gender == 'M' ? '(남)' : '(여)'}"></span>
+                <span style="color:#888; font-size:0.85rem;" th:text="'- ' + ${g.athletes.size()} + '명'"></span>
+            </h3>
+            <div th:each="a : ${g.athletes}" class="athlete-card" th:id="'athlete-' + ${a.athleteId}">
+                <input type="checkbox" class="merge-check" th:attr="data-id=${a.athleteId}" onchange="updateMergeBar(this)">
+                <div class="athlete-info">
+                    <span class="athlete-id" th:text="'#' + ${a.athleteId}"></span>
+                    <span th:if="${a.notes != null}" style="color:#888; font-size:0.85rem;" th:text="' (' + ${a.notes} + ')'"></span>
+                    <div th:each="h : ${a.history}" class="history-item">
+                        <span th:text="${h.competitionName}"></span>:
+                        <span th:text="${h.region}"></span>
+                        <span th:text="${h.teamName}"></span>
+                        <span th:if="${h.grade != null}" th:text="'(' + ${h.grade} + '학년)'" style="color:#999;"></span>
+                        <span th:if="${h.divisions != null}" th:text="'[' + ${h.divisions} + ']'" style="color:#3498db; font-size:0.8rem;"></span>
+                        <span th:if="${h.events != null}" th:text="${h.events}" style="color:#888; font-size:0.8rem;"></span>
+                    </div>
+                    <div th:if="${a.history.isEmpty()}" class="history-item" style="color:#ccc;">출전 이력 없음</div>
+                </div>
+            </div>
+            <div class="merge-bar">
+                <span class="merge-info" style="font-size:0.85rem;"></span>
+                <button class="btn btn-merge" onclick="doMerge(this)">선택 병합</button>
+            </div>
+        </div>
+    </main>
+
+    <script>
+        function updateMergeBar(checkbox) {
+            var group = checkbox.closest('.group');
+            var checked = group.querySelectorAll('.merge-check:checked');
+            var bar = group.querySelector('.merge-bar');
+            var info = bar.querySelector('.merge-info');
+
+            if (checked.length >= 2) {
+                var ids = [];
+                checked.forEach(function(c) { ids.push(parseInt(c.dataset.id)); });
+                var keepId = ids[0];
+                var removeIds = ids.slice(1);
+                info.textContent = '#' + keepId + '에 통합 (삭제: ' + removeIds.map(function(id) { return '#' + id; }).join(', ') + ')';
+                bar.classList.add('active');
+            } else {
+                bar.classList.remove('active');
+            }
+        }
+
+        function doMerge(btn) {
+            var group = btn.closest('.group');
+            var checked = group.querySelectorAll('.merge-check:checked');
+            if (checked.length < 2) return;
+
+            var ids = [];
+            checked.forEach(function(c) { ids.push(parseInt(c.dataset.id)); });
+            var keepId = ids[0];
+            var removeIds = ids.slice(1);
+
+            var promise = Promise.resolve();
+            removeIds.forEach(function(removeId) {
+                promise = promise.then(function() {
+                    return fetch('/admin/athletes/merge', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ keepId: keepId, removeId: removeId })
+                    }).then(function(r) { return r.json(); });
+                });
+            });
+
+            promise.then(function() {
+                // 삭제된 카드 제거
+                removeIds.forEach(function(id) {
+                    var card = document.getElementById('athlete-' + id);
+                    if (card) card.remove();
+                });
+                // 남은 카드가 1개면 그룹 제거
+                var remaining = group.querySelectorAll('.athlete-card');
+                if (remaining.length <= 1) {
+                    group.remove();
+                } else {
+                    // 체크 해제, 바 숨기기
+                    group.querySelectorAll('.merge-check').forEach(function(c) { c.checked = false; });
+                    group.querySelector('.merge-bar').classList.remove('active');
+                }
+                var badge = document.querySelector('.count-badge');
+                if (badge) badge.textContent = document.querySelectorAll('.group').length;
+            }).catch(function(err) { alert('오류: ' + err.message); });
+        }
+    </script>
+</body>
+</html>

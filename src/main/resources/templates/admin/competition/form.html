@@ -107,6 +107,34 @@
                    class="btn btn-secondary">취소</a>
             </div>
         </form>
+
+        <!-- 이미지 업로드 (수정 모드에서만 표시) -->
+        <div th:if="${dto.id != null}" style="margin-top: 2rem; padding-top: 1.5rem; border-top: 2px solid #eee;">
+            <h2>대회 이미지</h2>
+            <div th:if="${imageSuccess}" style="color: #27ae60; margin: 0.5rem 0;" th:text="${imageSuccess}"></div>
+            <div th:if="${imageError}" style="color: #e74c3c; margin: 0.5rem 0;" th:text="${imageError}"></div>
+
+            <!-- 현재 이미지 미리보기 -->
+            <div th:if="${competition != null and competition.imagePath != null}" style="margin: 1rem 0;">
+                <img th:src="@{/api/competitions/{id}/image(id=${dto.id})}"
+                     alt="대회 이미지" style="max-width: 400px; max-height: 300px; border-radius: 8px; border: 1px solid #ddd;">
+                <div style="margin-top: 0.5rem;">
+                    <form th:action="@{/admin/competitions/{id}/image/delete(id=${dto.id})}" method="post"
+                          style="display: inline;" onsubmit="return confirm('이미지를 삭제하시겠습니까?')">
+                        <button type="submit" class="btn" style="background: #e74c3c; color: #fff;">이미지 삭제</button>
+                    </form>
+                </div>
+            </div>
+
+            <!-- 업로드 폼 -->
+            <form th:action="@{/admin/competitions/{id}/image(id=${dto.id})}" method="post" enctype="multipart/form-data">
+                <div class="form-group">
+                    <label for="imageFile">이미지 파일 (JPG, PNG, WebP)</label>
+                    <input type="file" id="imageFile" name="imageFile" accept="image/*">
+                </div>
+                <button type="submit" class="btn btn-primary">이미지 업로드</button>
+            </form>
+        </div>
     </main>
 </body>
 </html>
