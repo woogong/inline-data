@@ -39,7 +39,9 @@ public class AthleteService {
             }
             if (entries.isEmpty()) return new AthleteListItem(a, null, null, null);
             CompetitionEntry latest = entries.stream()
-                    .max(java.util.Comparator.comparingLong(CompetitionEntry::getId))
+                    .max(java.util.Comparator.comparing(
+                            (CompetitionEntry ce) -> ce.getCompetition().getStartDate(),
+                            java.util.Comparator.nullsFirst(java.util.Comparator.naturalOrder())))
                     .orElse(null);
             if (latest == null) return new AthleteListItem(a, null, null, null);
             String division = "";
@@ -67,7 +69,8 @@ public class AthleteService {
 
     public record PerformanceDto(String competitionName, String divisionName, String eventName,
                                  String round, Integer ranking, String record, String newRecord,
-                                 String qualification, String note, Integer eventNumber) {}
+                                 String qualification, String note, Integer eventNumber,
+                                 java.time.LocalDate competitionStartDate) {}
 
     public AthleteProfileDto findLatestProfile(Long athleteId) {
         Athlete athlete = findById(athleteId);
@@ -77,7 +80,10 @@ public class AthleteService {
         }
         if (entries.isEmpty()) return new AthleteProfileDto(null, null, null);
         CompetitionEntry latest = entries.stream()
-                .max(java.util.Comparator.comparingLong(CompetitionEntry::getId)).orElse(null);
+                .max(java.util.Comparator.comparing(
+                        (CompetitionEntry ce) -> ce.getCompetition().getStartDate(),
+                        java.util.Comparator.nullsFirst(java.util.Comparator.naturalOrder())))
+                .orElse(null);
         if (latest == null) return new AthleteProfileDto(null, null, null);
         String division = "";
         try {
@@ -114,14 +120,18 @@ public class AthleteService {
                             result != null ? result.getNewRecord() : null,
                             result != null ? result.getQualification() : null,
                             result != null ? result.getNote() : null,
-                            round.getEventNumber()
+                            round.getEventNumber(),
+                            comp.getStartDate()
                     ));
                 }
             } catch (Exception ignored) {}
         }
-        // 경기번호 역순 (최근 경기 먼저)
-        performances.sort(java.util.Comparator.comparingInt(
-                (PerformanceDto p) -> p.eventNumber() != null ? p.eventNumber() : 0).reversed());
+        // 최근 대회 먼저, 같은 대회 내에서는 경기번호 역순
+        performances.sort(java.util.Comparator
+                .comparing((PerformanceDto p) -> p.competitionStartDate(),
+                        java.util.Comparator.nullsLast(java.util.Comparator.reverseOrder()))
+                .thenComparing(p -> p.eventNumber() != null ? p.eventNumber() : 0,
+                        java.util.Comparator.reverseOrder()));
         return performances;
     }
 
