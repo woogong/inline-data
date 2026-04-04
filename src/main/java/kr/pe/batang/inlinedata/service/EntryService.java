@@ -14,7 +14,12 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import kr.pe.batang.inlinedata.repository.EventRoundRepository;
+
+import java.util.ArrayList;
+import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
 
 @Service
@@ -24,6 +29,7 @@ public class EntryService {
 
     private final CompetitionEntryRepository competitionEntryRepository;
     private final EventHeatRepository eventHeatRepository;
+    private final EventRoundRepository eventRoundRepository;
     private final HeatEntryRepository heatEntryRepository;
     private final EventResultRepository eventResultRepository;
 
@@ -81,5 +87,40 @@ public class EntryService {
     public void deleteEntry(Long heatEntryId) {
         eventResultRepository.findByHeatEntryId(heatEntryId).ifPresent(eventResultRepository::delete);
         heatEntryRepository.deleteById(heatEntryId);
+    }
+
+    /**
+     * 같은 종목에 출전한 선수 중 이름이 매칭되는 후보를 반환한다.
+     */
+    public List<Map<String, Object>> suggestEntries(Long eventId, String query) {
+        if (query == null || query.isBlank()) return List.of();
+        String q = query.trim();
+
+        // 같은 종목의 모든 라운드 → 모든 조 → 모든 엔트리
+        List<EventRound> rounds = eventRoundRepository.findByEventIdOrderByEventNumberAsc(eventId);
+        List<Long> heatIds = new ArrayList<>();
+        for (EventRound r : rounds) {
+            for (EventHeat h : eventHeatRepository.findByEventRoundIdOrderByHeatNumberAsc(r.getId())) {
+                heatIds.add(h.getId());
+            }
+        }
+        if (heatIds.isEmpty()) return List.of();
+
+        // 중복 제거를 위해 athleteName 기준으로 그룹화
+        Map<String, Map<String, Object>> seen = new LinkedHashMap<>();
+        for (Long heatId : heatIds) {
+            for (HeatEntry he : heatEntryRepository.findByHeatIdOrderByBibNumberAsc(heatId)) {
+                CompetitionEntry ce = he.getEntry();
+                if (ce.getAthleteName().contains(q) && !seen.containsKey(ce.getAthleteName() + "|" + ce.getTeamName())) {
+                    Map<String, Object> item = new LinkedHashMap<>();
+                    item.put("bibNumber", he.getBibNumber());
+                    item.put("name", ce.getAthleteName());
+                    item.put("region", ce.getRegion());
+                    item.put("teamName", ce.getTeamName());
+                    seen.put(ce.getAthleteName() + "|" + ce.getTeamName(), item);
+                }
+            }
+        }
+        return new ArrayList<>(seen.values());
     }
 }

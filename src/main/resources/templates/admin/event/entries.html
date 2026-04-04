@@ -36,6 +36,11 @@
         .add-heat-bar { margin: 1rem 0; display: flex; gap: 0.5rem; align-items: center; }
         .add-heat-bar input { width: 60px; padding: 0.4rem; border: 1px solid #ccc; border-radius: 4px; text-align: center; }
         .actions { margin-top: 1.5rem; }
+        .suggest-list { position: absolute; z-index: 100; background: #fff; border: 1px solid #ccc; border-radius: 4px; box-shadow: 0 2px 8px rgba(0,0,0,0.15); max-height: 200px; overflow-y: auto; min-width: 300px; }
+        .suggest-item { padding: 0.4rem 0.6rem; cursor: pointer; font-size: 0.85rem; border-bottom: 1px solid #f0f0f0; }
+        .suggest-item:hover, .suggest-item.active { background: #e8f4fd; }
+        .suggest-item .sub { color: #888; font-size: 0.8rem; }
+        .name-cell { position: relative; }
     </style>
 </head>
 <body>
@@ -84,6 +89,7 @@
         const HEAT_DELETE_URL = BASE + '/heats/delete';
         const ENTRY_SAVE_URL = BASE + '/entries/save';
         const ENTRY_DELETE_URL = BASE + '/entries/delete';
+        const SUGGEST_URL = BASE + '/entries/suggest';
 
         document.getElementById('addHeatBtn').addEventListener('click', () => {
             const input = document.getElementById('newHeatNumber');
@@ -109,7 +115,7 @@
         function addEntryRow(section) {
             const tr = document.createElement('tr');
             tr.className = 'entry-row new-row'; tr.dataset.heatId = section.dataset.heatId;
-            tr.innerHTML = `<td><input type="text" data-field="bibNumber" style="width:50px; text-align:center;" placeholder="번호"></td><td><input type="text" data-field="name" placeholder="이름"></td><td><input type="text" data-field="region" placeholder="지역"></td><td><input type="text" data-field="teamName" placeholder="팀명"></td><td style="text-align:center;"><button type="button" class="btn btn-save btn-sm save-entry-btn">저장</button> <button type="button" class="btn btn-danger btn-sm delete-entry-btn">X</button> <span class="status-icon"></span></td>`;
+            tr.innerHTML = `<td><input type="text" data-field="bibNumber" style="width:50px; text-align:center;" placeholder="번호"></td><td class="name-cell"><input type="text" data-field="name" placeholder="이름" autocomplete="off"></td><td><input type="text" data-field="region" placeholder="지역"></td><td><input type="text" data-field="teamName" placeholder="팀명"></td><td style="text-align:center;"><button type="button" class="btn btn-save btn-sm save-entry-btn">저장</button> <button type="button" class="btn btn-danger btn-sm delete-entry-btn">X</button> <span class="status-icon"></span></td>`;
             section.querySelector('tbody').appendChild(tr);
             bindEntryRow(tr);
             tr.querySelector('[data-field="bibNumber"]').focus();
@@ -134,7 +140,65 @@
         function bindEntryRow(row) {
             const sb = row.querySelector('.save-entry-btn'); if (sb) sb.addEventListener('click', () => saveRow(row));
             row.querySelector('.delete-entry-btn').addEventListener('click', () => deleteEntryRow(row));
+            const nameInput = row.querySelector('[data-field="name"]');
+            if (nameInput && !nameInput.hasAttribute('readonly')) bindSuggest(row, nameInput);
         }
+
+        let suggestTimer = null;
+        function bindSuggest(row, input) {
+            const cell = input.closest('.name-cell');
+            if (!cell) return;
+            let list = null;
+            let activeIdx = -1;
+
+            function closeSuggest() { if (list) { list.remove(); list = null; } activeIdx = -1; }
+
+            input.addEventListener('input', () => {
+                clearTimeout(suggestTimer);
+                const q = input.value.trim();
+                if (q.length === 0) { closeSuggest(); return; }
+                suggestTimer = setTimeout(() => {
+                    fetch(SUGGEST_URL + '?q=' + encodeURIComponent(q))
+                    .then(r => r.json())
+                    .then(items => {
+                        closeSuggest();
+                        if (items.length === 0) return;
+                        list = document.createElement('div');
+                        list.className = 'suggest-list';
+                        items.forEach((item, idx) => {
+                            const d = document.createElement('div');
+                            d.className = 'suggest-item';
+                            d.innerHTML = '<b>' + escHtml(item.name) + '</b> <span class="sub">#' + item.bibNumber + ' ' + escHtml(item.region || '') + ' ' + escHtml(item.teamName || '') + '</span>';
+                            d.addEventListener('click', () => applySuggest(row, item));
+                            list.appendChild(d);
+                        });
+                        cell.appendChild(list);
+                    });
+                }, 200);
+            });
+
+            input.addEventListener('keydown', (e) => {
+                if (!list) return;
+                const items = list.querySelectorAll('.suggest-item');
+                if (e.key === 'ArrowDown') { e.preventDefault(); activeIdx = Math.min(activeIdx + 1, items.length - 1); updateActive(items); }
+                else if (e.key === 'ArrowUp') { e.preventDefault(); activeIdx = Math.max(activeIdx - 1, 0); updateActive(items); }
+                else if (e.key === 'Enter' && activeIdx >= 0) { e.preventDefault(); items[activeIdx].click(); }
+                else if (e.key === 'Escape') { closeSuggest(); }
+            });
+
+            function updateActive(items) { items.forEach((d, i) => d.classList.toggle('active', i === activeIdx)); }
+
+            input.addEventListener('blur', () => setTimeout(closeSuggest, 200));
+        }
+
+        function applySuggest(row, item) {
+            row.querySelector('[data-field="bibNumber"]').value = item.bibNumber;
+            row.querySelector('[data-field="name"]').value = item.name;
+            row.querySelector('[data-field="region"]').value = item.region || '';
+            row.querySelector('[data-field="teamName"]').value = item.teamName || '';
+        }
+
+        function escHtml(s) { const d = document.createElement('div'); d.textContent = s; return d.innerHTML; }
 
         function bindHeatSection(section) {
             section.querySelector('.add-entry-btn').addEventListener('click', () => addEntryRow(section));

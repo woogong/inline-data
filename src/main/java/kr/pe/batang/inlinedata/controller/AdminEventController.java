@@ -199,6 +199,13 @@ public class AdminEventController {
         return Map.of("status", "ok");
     }
 
+    @GetMapping("/{eventId}/rounds/{roundId}/entries/suggest")
+    @ResponseBody
+    public List<Map<String, Object>> suggestEntry(@PathVariable Long compId, @PathVariable Long eventId,
+                                                   @RequestParam String q) {
+        return entryService.suggestEntries(eventId, q);
+    }
+
     @PostMapping("/{eventId}/rounds/{roundId}/entries/delete")
     @ResponseBody
     public Map<String, Object> deleteEntry(@PathVariable Long compId, @PathVariable Long eventId,
