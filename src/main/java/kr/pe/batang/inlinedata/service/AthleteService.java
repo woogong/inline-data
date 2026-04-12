@@ -67,10 +67,12 @@ public class AthleteService {
 
     public record AthleteProfileDto(String region, String teamName, String divisionsText) {}
 
-    public record PerformanceDto(String competitionName, String divisionName, String eventName,
+    public record PerformanceDto(String competitionName, Long competitionId, Long eventId, Long roundId, Long heatId,
+                                 String divisionName, String eventName,
                                  String round, Integer ranking, String record, String newRecord,
                                  String qualification, String note, Integer eventNumber,
-                                 java.time.LocalDate competitionStartDate) {}
+                                 java.time.LocalDate competitionStartDate,
+                                 String region, String teamName) {}
 
     public AthleteProfileDto findLatestProfile(Long athleteId) {
         Athlete athlete = findById(athleteId);
@@ -113,7 +115,8 @@ public class AthleteService {
                     var event = round.getEvent();
                     EventResult result = eventResultRepository.findByHeatEntryId(he.getId()).orElse(null);
                     performances.add(new PerformanceDto(
-                            compName, event.getDivisionName(), event.getEventName(),
+                            compName, comp.getId(), event.getId(), round.getId(), he.getHeat().getId(),
+                            event.getDivisionName(), event.getEventName(),
                             round.getRound(),
                             result != null ? result.getRanking() : null,
                             result != null ? result.getRecord() : null,
@@ -121,7 +124,8 @@ public class AthleteService {
                             result != null ? result.getQualification() : null,
                             result != null ? result.getNote() : null,
                             round.getEventNumber(),
-                            comp.getStartDate()
+                            comp.getStartDate(),
+                            ce.getRegion(), ce.getTeamName()
                     ));
                 }
             } catch (Exception ignored) {}

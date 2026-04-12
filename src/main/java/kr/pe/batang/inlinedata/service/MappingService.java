@@ -61,7 +61,8 @@ public class MappingService {
         return cache;
     }
 
-    public record HistoryDto(String competitionName, String teamName, String region, Integer grade,
+    public record HistoryDto(String competitionName, Integer edition, Integer year,
+                             String teamName, String region, Integer grade,
                              String divisions, String events) {}
 
     private HistoryDto toHistoryDto(CompetitionEntry ce) {
@@ -74,7 +75,9 @@ public class MappingService {
         String events = heatEntries.stream()
                 .map(he -> he.getHeat().getEventRound().getEvent().getEventName())
                 .distinct().sorted().collect(Collectors.joining(", "));
-        return new HistoryDto(compName, ce.getTeamName(), ce.getRegion(), ce.getGrade(),
+        Integer edition = ce.getCompetition().getEdition();
+        Integer year = ce.getCompetition().getStartDate() != null ? ce.getCompetition().getStartDate().getYear() : null;
+        return new HistoryDto(compName, edition, year, ce.getTeamName(), ce.getRegion(), ce.getGrade(),
                 divisions.isEmpty() ? null : divisions, events.isEmpty() ? null : events);
     }
 

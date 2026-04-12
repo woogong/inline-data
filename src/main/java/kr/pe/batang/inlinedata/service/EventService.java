@@ -19,6 +19,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.util.Comparator;
+import java.util.HashSet;
 import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
 import java.util.List;
@@ -42,7 +43,7 @@ public class EventService {
 
     // --- Event (종목) ---
 
-    public record MedalInfo(String gold, String silver, String bronze) {}
+    public record MedalInfo(String gold, Long goldId, String silver, Long silverId, String bronze, Long bronzeId) {}
 
     public record DivisionStat(String division, int male, int female, int total) {}
 
@@ -54,11 +55,12 @@ public class EventService {
     public record TeamMedalStat(String teamName, String region, int gold, int silver, int bronze,
                                 int total, String divisions, List<AthleteAward> awards) {}
 
-    public record NewRecordInfo(String type, String athleteName, String region, String teamName,
+    public record NewRecordInfo(String type, String athleteName, Long athleteId, String region, String teamName,
                                 String divisionName, String eventName, String round,
                                 String record, Integer ranking) {}
 
     public record ParticipantStats(int totalMale, int totalFemale, int totalAll,
+                                   int totalEvents, int totalRegions,
                                    List<DivisionStat> divisionStats) {}
 
     public record AthleteProfileInfo(String name, String region, String teamName, Long athleteId,
@@ -66,6 +68,17 @@ public class EventService {
 
     public record AthleteMedalRecord(String competitionName, String divisionName, String eventName,
                                      int ranking, String record) {}
+
+    public record CompetitionMedalCount(int edition, String shortName, int gold, int silver, int bronze) {}
+    public record TeamMedalCount(String teamName, int medals) {}
+    public record AthleteMedalCount(String name, int gold, int silver, int bronze, int total) {}
+    public record AllTimeRegionMedalStat(
+        String region, int gold, int silver, int bronze, int total,
+        List<CompetitionMedalCount> byCompetition,
+        List<TeamMedalCount> topTeams,
+        List<AthleteMedalCount> topAthletes
+    ) {}
+    public record AllTimeSummary(int totalCompetitions, int totalEvents, int totalMedals, int totalRegions) {}
 
     public List<Event> findByCompetitionId(Long competitionId) {
         return eventRepository.findByCompetitionIdOrderByFirstEventNumber(competitionId);
@@ -75,19 +88,31 @@ public class EventService {
         List<EventResult> medalResults = eventResultRepository.findMedalResultsByCompetitionId(competitionId);
 
         Map<Long, MedalInfo> medals = new LinkedHashMap<>();
-        // eventId → ranking → name
-        Map<Long, Map<Integer, String>> byEvent = new LinkedHashMap<>();
+        // eventId → ranking → {name, athleteId}
+        Map<Long, Map<Integer, String>> nameByEvent = new LinkedHashMap<>();
+        Map<Long, Map<Integer, Long>> idByEvent = new LinkedHashMap<>();
         for (EventResult er : medalResults) {
             Long eventId = er.getHeatEntry().getHeat().getEventRound().getEvent().getId();
-            byEvent.computeIfAbsent(eventId, k -> new LinkedHashMap<>())
-                    .putIfAbsent(er.getRanking(), er.getHeatEntry().getEntry().getAthleteName());
+            var entry = er.getHeatEntry().getEntry();
+            nameByEvent.computeIfAbsent(eventId, k -> new LinkedHashMap<>())
+                    .putIfAbsent(er.getRanking(), entry.getAthleteName());
+            Long athleteId = entry.getAthlete() != null ? entry.getAthlete().getId() : null;
+            idByEvent.computeIfAbsent(eventId, k -> new LinkedHashMap<>())
+                    .putIfAbsent(er.getRanking(), athleteId);
         }
 
         List<Event> events = findByCompetitionId(competitionId);
         for (Event event : events) {
-            Map<Integer, String> m = byEvent.get(event.getId());
-            if (m == null) { medals.put(event.getId(), new MedalInfo(null, null, null)); continue; }
-            medals.put(event.getId(), new MedalInfo(m.get(1), m.get(2), m.get(3)));
+            Map<Integer, String> names = nameByEvent.get(event.getId());
+            Map<Integer, Long> ids = idByEvent.get(event.getId());
+            if (names == null) {
+                medals.put(event.getId(), new MedalInfo(null, null, null, null, null, null));
+                continue;
+            }
+            medals.put(event.getId(), new MedalInfo(
+                    names.get(1), ids != null ? ids.get(1) : null,
+                    names.get(2), ids != null ? ids.get(2) : null,
+                    names.get(3), ids != null ? ids.get(3) : null));
         }
         return medals;
     }
@@ -146,7 +171,15 @@ public class EventService {
                 .sorted(Comparator.comparingInt(d -> divisionOrder(d.division())))
                 .toList();
 
-        return new ParticipantStats(totalMale, totalFemale, totalMale + totalFemale, divisionStats);
+        int totalEvents = findByCompetitionId(competitionId).size();
+        long totalRegions = entries.stream()
+                .map(CompetitionEntry::getRegion)
+                .filter(r -> r != null && !r.isBlank())
+                .distinct()
+                .count();
+
+        return new ParticipantStats(totalMale, totalFemale, totalMale + totalFemale,
+                totalEvents, (int) totalRegions, divisionStats);
     }
 
     /**
@@ -203,8 +236,9 @@ public class EventService {
                     var heat = er.getHeatEntry().getHeat();
                     var round = heat.getEventRound();
                     var event = round.getEvent();
+                    Long athleteId = ce.getAthlete() != null ? ce.getAthlete().getId() : null;
                     return new NewRecordInfo(
-                            er.getNewRecord(), ce.getAthleteName(), ce.getRegion(), ce.getTeamName(),
+                            er.getNewRecord(), ce.getAthleteName(), athleteId, ce.getRegion(), ce.getTeamName(),
                             event.getDivisionName(), event.getEventName(), round.getRound(),
                             er.getRecord(), er.getRanking());
                 })
@@ -323,6 +357,118 @@ public class EventService {
                 .toList();
     }
 
+    public List<AllTimeRegionMedalStat> findAllTimeRegionMedalStats() {
+        List<EventResult> allMedals = eventResultRepository.findAllMedalResults();
+
+        // region -> gold/silver/bronze counts
+        Map<String, int[]> regionMedals = new LinkedHashMap<>();
+        // region -> (edition -> gold/silver/bronze)
+        Map<String, Map<Integer, int[]>> regionByComp = new LinkedHashMap<>();
+        // region -> (teamName -> medal count)
+        Map<String, Map<String, Integer>> regionTeams = new LinkedHashMap<>();
+        // region -> (athleteName -> gold/silver/bronze)
+        Map<String, Map<String, int[]>> regionAthletes = new LinkedHashMap<>();
+        // edition -> shortName mapping
+        Map<Integer, String> editionNames = new LinkedHashMap<>();
+
+        for (EventResult er : allMedals) {
+            var ce = er.getHeatEntry().getEntry();
+            var comp = ce.getCompetition();
+            String region = ce.getRegion();
+            if (region == null || region.isBlank()) continue;
+
+            int ranking = er.getRanking();
+            int edition = comp.getEdition() != null ? comp.getEdition() : 0;
+            editionNames.putIfAbsent(edition, comp.getShortName());
+
+            // Total medals
+            int[] counts = regionMedals.computeIfAbsent(region, k -> new int[3]);
+            if (ranking == 1) counts[0]++;
+            else if (ranking == 2) counts[1]++;
+            else if (ranking == 3) counts[2]++;
+
+            // By competition
+            int[] compCounts = regionByComp
+                .computeIfAbsent(region, k -> new LinkedHashMap<>())
+                .computeIfAbsent(edition, k -> new int[3]);
+            if (ranking == 1) compCounts[0]++;
+            else if (ranking == 2) compCounts[1]++;
+            else if (ranking == 3) compCounts[2]++;
+
+            // By team
+            String teamName = ce.getTeamName();
+            if (teamName != null && !teamName.isBlank()) {
+                regionTeams.computeIfAbsent(region, k -> new LinkedHashMap<>())
+                    .merge(teamName, 1, Integer::sum);
+            }
+
+            // By athlete
+            String athleteName = ce.getAthleteName();
+            if (athleteName != null) {
+                int[] aCounts = regionAthletes
+                    .computeIfAbsent(region, k -> new LinkedHashMap<>())
+                    .computeIfAbsent(athleteName, k -> new int[3]);
+                if (ranking == 1) aCounts[0]++;
+                else if (ranking == 2) aCounts[1]++;
+                else if (ranking == 3) aCounts[2]++;
+            }
+        }
+
+        return regionMedals.entrySet().stream()
+            .map(e -> {
+                String region = e.getKey();
+                int[] c = e.getValue();
+                int total = c[0] + c[1] + c[2];
+
+                // byCompetition - sorted by edition
+                List<CompetitionMedalCount> byComp = regionByComp.getOrDefault(region, Map.of())
+                    .entrySet().stream()
+                    .sorted(Map.Entry.comparingByKey())
+                    .map(ec -> new CompetitionMedalCount(ec.getKey(),
+                        editionNames.getOrDefault(ec.getKey(), ""),
+                        ec.getValue()[0], ec.getValue()[1], ec.getValue()[2]))
+                    .toList();
+
+                // topTeams - sorted by medal count desc, limit 5
+                List<TeamMedalCount> topTeams = regionTeams.getOrDefault(region, Map.of())
+                    .entrySet().stream()
+                    .sorted(Map.Entry.<String, Integer>comparingByValue().reversed())
+                    .limit(5)
+                    .map(et -> new TeamMedalCount(et.getKey(), et.getValue()))
+                    .toList();
+
+                // topAthletes - sorted by total desc, limit 5
+                List<AthleteMedalCount> topAthletes = regionAthletes.getOrDefault(region, Map.of())
+                    .entrySet().stream()
+                    .map(ea -> new AthleteMedalCount(ea.getKey(), ea.getValue()[0], ea.getValue()[1], ea.getValue()[2],
+                        ea.getValue()[0] + ea.getValue()[1] + ea.getValue()[2]))
+                    .sorted(Comparator.comparingInt(AthleteMedalCount::total).reversed()
+                        .thenComparingInt(AthleteMedalCount::gold).reversed())
+                    .limit(5)
+                    .toList();
+
+                return new AllTimeRegionMedalStat(region, c[0], c[1], c[2], total, byComp, topTeams, topAthletes);
+            })
+            .sorted(Comparator.comparingInt((AllTimeRegionMedalStat r) -> r.total()).reversed()
+                .thenComparingInt(r -> r.gold()).reversed()
+                .thenComparingInt(r -> r.silver()).reversed())
+            .toList();
+    }
+
+    public AllTimeSummary findAllTimeSummary() {
+        List<EventResult> allMedals = eventResultRepository.findAllMedalResults();
+        Set<Long> compIds = new HashSet<>();
+        Set<Long> eventIds = new HashSet<>();
+        Set<String> regions = new HashSet<>();
+        for (EventResult er : allMedals) {
+            compIds.add(er.getHeatEntry().getEntry().getCompetition().getId());
+            eventIds.add(er.getHeatEntry().getHeat().getEventRound().getEvent().getId());
+            String region = er.getHeatEntry().getEntry().getRegion();
+            if (region != null && !region.isBlank()) regions.add(region);
+        }
+        return new AllTimeSummary(compIds.size(), eventIds.size(), allMedals.size(), regions.size());
+    }
+
     private static int recordTypeOrder(String type) {
         return switch (type) {
             case "세계신" -> 0;
@@ -346,7 +492,8 @@ public class EventService {
     }
 
     private static String normalizeDivision(String divisionName) {
-        String base = divisionName.replaceFirst("^[여남]", "");
+        // "여초부 5,6학년" → "초부 5,6학년", "남자18세이하부" → "18세이하부"
+        String base = divisionName.replaceFirst("^(여자?|남자?)", "");
         return base.replaceFirst("^초부", "초등부")
                    .replaceFirst("^중부", "중등부")
                    .replaceFirst("^고부", "고등부")

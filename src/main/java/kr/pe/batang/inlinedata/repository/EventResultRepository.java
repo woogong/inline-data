@@ -27,6 +27,7 @@ public interface EventResultRepository extends JpaRepository<EventResult, Long> 
     @Query("SELECT er FROM EventResult er " +
            "JOIN FETCH er.heatEntry he " +
            "JOIN FETCH he.entry ce " +
+           "LEFT JOIN FETCH ce.athlete " +
            "JOIN he.heat eh " +
            "JOIN eh.eventRound r " +
            "JOIN r.event e " +
@@ -51,6 +52,7 @@ public interface EventResultRepository extends JpaRepository<EventResult, Long> 
     @Query("SELECT er FROM EventResult er " +
            "JOIN FETCH er.heatEntry he " +
            "JOIN FETCH he.entry ce " +
+           "LEFT JOIN FETCH ce.athlete " +
            "JOIN he.heat eh " +
            "JOIN eh.eventRound r " +
            "JOIN r.event e " +
@@ -71,4 +73,16 @@ public interface EventResultRepository extends JpaRepository<EventResult, Long> 
            "AND er.ranking IN (1, 2, 3) " +
            "ORDER BY c.startDate DESC, e.divisionName, e.eventName")
     List<EventResult> findMedalsByAthleteName(@Param("athleteName") String athleteName);
+
+    @Query("SELECT er FROM EventResult er " +
+           "JOIN FETCH er.heatEntry he " +
+           "JOIN FETCH he.entry ce " +
+           "JOIN FETCH ce.competition c " +
+           "JOIN he.heat eh " +
+           "JOIN eh.eventRound r " +
+           "JOIN r.event e " +
+           "WHERE r.round = '결승' " +
+           "AND er.ranking IN (1, 2, 3) " +
+           "ORDER BY c.startDate, e.id, er.ranking")
+    List<EventResult> findAllMedalResults();
 }

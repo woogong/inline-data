@@ -58,7 +58,9 @@
                     <span class="athlete-id" th:text="'#' + ${a.athleteId}"></span>
                     <span th:if="${a.notes != null}" style="color:#888; font-size:0.85rem;" th:text="' (' + ${a.notes} + ')'"></span>
                     <div th:each="h : ${a.history}" class="history-item">
-                        <span th:text="${h.competitionName}"></span>:
+                        <span th:if="${h.edition != null}" th:text="'제' + ${h.edition} + '회 '"></span>
+                        <span th:text="${h.competitionName}"></span>
+                        <span th:if="${h.year != null}" th:text="'(' + ${h.year} + ')'" style="color:#999;"></span>:
                         <span th:text="${h.region}"></span>
                         <span th:text="${h.teamName}"></span>
                         <span th:if="${h.grade != null}" th:text="'(' + ${h.grade} + '학년)'" style="color:#999;"></span>

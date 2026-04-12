@@ -62,10 +62,13 @@ public class ApiCompetitionController {
 
             EventService.MedalInfo medal = medals.get(event.getId());
             if (medal != null) {
-                Map<String, String> medalMap = new LinkedHashMap<>();
+                Map<String, Object> medalMap = new LinkedHashMap<>();
                 medalMap.put("gold", medal.gold());
+                medalMap.put("goldId", medal.goldId());
                 medalMap.put("silver", medal.silver());
+                medalMap.put("silverId", medal.silverId());
                 medalMap.put("bronze", medal.bronze());
+                medalMap.put("bronzeId", medal.bronzeId());
                 map.put("medals", medalMap);
             } else {
                 map.put("medals", null);
