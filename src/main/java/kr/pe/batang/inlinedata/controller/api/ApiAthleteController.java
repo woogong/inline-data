@@ -29,13 +29,9 @@ public class ApiAthleteController {
     @GetMapping("/athletes")
     public List<Map<String, Object>> list(@RequestParam(required = false) String name) {
         boolean isSearch = name != null && !name.isBlank();
-        List<AthleteService.AthleteListItem> items = athleteService.findAllWithLatestInfo();
-        if (isSearch) {
-            String searchName = name.trim();
-            items = items.stream()
-                    .filter(item -> item.athlete().getName().contains(searchName))
-                    .toList();
-        }
+        List<AthleteService.AthleteListItem> items = isSearch
+                ? athleteService.searchWithLatestInfo(name.trim())
+                : athleteService.findAllWithLatestInfo();
         List<AthleteService.AthleteListItem> finalItems = items;
         return finalItems.stream().map(item -> {
             Map<String, Object> map = new LinkedHashMap<>();

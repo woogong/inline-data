@@ -31,7 +31,14 @@ public class AthleteService {
     }
 
     public List<AthleteListItem> findAllWithLatestInfo() {
-        List<Athlete> athletes = athleteRepository.findAllByOrderByNameAsc();
+        return findWithLatestInfo(athleteRepository.findAllByOrderByNameAsc());
+    }
+
+    public List<AthleteListItem> searchWithLatestInfo(String name) {
+        return findWithLatestInfo(athleteRepository.findByNameContaining(name));
+    }
+
+    private List<AthleteListItem> findWithLatestInfo(List<Athlete> athletes) {
         return athletes.stream().map(a -> {
             List<CompetitionEntry> entries = competitionEntryRepository.findByAthleteId(a.getId());
             if (entries.isEmpty()) {
