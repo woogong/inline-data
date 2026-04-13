@@ -1,0 +1,9 @@
+spring:
+  datasource:
+    url: jdbc:mariadb://host.docker.internal:3306/inlinedata?useUnicode=true&characterEncoding=UTF-8
+    username: ${DB_USERNAME:inlinedata}
+    password: ${DB_PASSWORD:parksj11#$}
+
+app:
+  upload:
+    dir: /data/inlinedata

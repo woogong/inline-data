@@ -9,9 +9,6 @@ spring:
   application:
     name: inlinedata
   datasource:
-    url: jdbc:mariadb://localhost:3306/inlinedata?useUnicode=true&characterEncoding=UTF-8
-    username: root
-    password: parksj11
     driver-class-name: org.mariadb.jdbc.Driver
   servlet:
     multipart:
@@ -20,11 +17,4 @@ spring:
   jpa:
     hibernate:
       ddl-auto: update
-    properties:
-      hibernate:
-        format_sql: true
     open-in-view: false
-
-app:
-  upload:
-    dir: /Users/batang/Developments/files/inlinedata

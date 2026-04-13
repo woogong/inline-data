@@ -36,6 +36,9 @@ out/
 ### VS Code ###
 .vscode/
 
+### Docker ###
+.env
+
 ### macOS ###
 .DS_Store
 refs/posting
