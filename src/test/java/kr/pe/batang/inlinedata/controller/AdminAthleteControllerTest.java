@@ -4,6 +4,7 @@ import kr.pe.batang.inlinedata.controller.dto.AthleteFormDto;
 import kr.pe.batang.inlinedata.entity.Athlete;
 import kr.pe.batang.inlinedata.service.AthleteService;
 import kr.pe.batang.inlinedata.service.EntryParsingService;
+import kr.pe.batang.inlinedata.service.MappingService;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -31,6 +32,9 @@ class AdminAthleteControllerTest {
 
     @MockitoBean
     private EntryParsingService entryParsingService;
+
+    @MockitoBean
+    private MappingService mappingService;
 
     private Athlete createAthlete() {
         return Athlete.builder().name("구예림").gender("F").build();

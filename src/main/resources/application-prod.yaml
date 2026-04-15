@@ -7,3 +7,9 @@ spring:
 app:
   upload:
     dir: /data/inlinedata
+  result-import:
+    watch-dir: ${RESULT_IMPORT_WATCH_DIR:}
+    archive-dir: ${RESULT_IMPORT_ARCHIVE_DIR:}
+    error-dir: ${RESULT_IMPORT_ERROR_DIR:}
+    polling-interval-ms: ${RESULT_IMPORT_POLLING_INTERVAL_MS:10000}
+    stable-wait-seconds: ${RESULT_IMPORT_STABLE_WAIT_SECONDS:15}

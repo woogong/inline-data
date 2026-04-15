@@ -53,6 +53,7 @@
             <span style="font-weight:600; font-size:0.9rem;">결과 PDF 가져오기:</span>
             <input type="file" id="resultFiles" accept=".pdf" multiple style="font-size:0.85rem;">
             <button class="btn btn-primary" onclick="uploadResultFiles()">가져오기</button>
+            <a th:href="@{/admin/result-import}" class="btn btn-secondary">자동 등록 설정</a>
             <span id="uploadProgress" style="font-size:0.85rem; color:#666;"></span>
         </div>
 

@@ -1,0 +1,128 @@
+<!DOCTYPE html>
+<html xmlns:th="http://www.thymeleaf.org">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>자동 결과 등록 설정 - InlineData</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; color: #333; line-height: 1.6; }
+        .container { max-width: 960px; margin: 0 auto; padding: 0 1rem; }
+        nav { background: #2c3e50; color: #fff; padding: 0.8rem 0; }
+        nav a { color: #ecf0f1; text-decoration: none; margin-right: 1.5rem; }
+        nav a:hover { color: #fff; text-decoration: underline; }
+        nav .nav-brand { font-weight: bold; font-size: 1.1rem; }
+        main { padding: 1.5rem 0; }
+        .actions { margin: 1rem 0; display: flex; gap: 0.5rem; align-items: center; flex-wrap: wrap; }
+        .panel { margin: 1rem 0; padding: 1rem; border: 1px solid #ddd; border-radius: 6px; background: #fafafa; }
+        .panel h2 { font-size: 1rem; margin-bottom: 0.8rem; }
+        .form-group { margin-bottom: 1rem; }
+        .form-group label { display: block; margin-bottom: 0.4rem; font-weight: 600; }
+        .form-group select, .form-group input[type="text"] { width: 100%; padding: 0.5rem; border: 1px solid #ccc; border-radius: 4px; font-size: 0.95rem; }
+        .checkbox-row { display: flex; align-items: center; gap: 0.5rem; margin-bottom: 1rem; }
+        .checkbox-row label { font-weight: 600; }
+        .btn { display: inline-block; padding: 0.4rem 1rem; border: none; border-radius: 4px; cursor: pointer; text-decoration: none; font-size: 0.9rem; }
+        .btn-primary { background: #3498db; color: #fff; }
+        .btn-primary:hover { background: #2980b9; }
+        .btn-secondary { background: #95a5a6; color: #fff; }
+        .btn-secondary:hover { background: #7f8c8d; }
+        .meta { color: #555; font-size: 0.9rem; margin-top: 0.5rem; }
+        .msg-success { padding: 0.6rem 1rem; background: #d4edda; color: #155724; border: 1px solid #c3e6cb; border-radius: 4px; margin-bottom: 1rem; }
+        table { width: 100%; border-collapse: collapse; margin: 1rem 0 0; }
+        th, td { padding: 0.6rem 0.8rem; border: 1px solid #ddd; text-align: left; }
+        th { background: #f5f5f5; font-weight: 600; }
+        tr:hover { background: #fafafa; }
+    </style>
+</head>
+<body>
+<div th:replace="~{fragments/header :: header}"></div>
+<main class="container">
+    <h1>자동 결과 등록 설정</h1>
+
+    <div th:if="${message}" class="msg-success" th:text="${message}"></div>
+
+    <div class="panel">
+        <h2>설정</h2>
+        <form th:action="@{/admin/result-import}" method="post">
+            <div class="checkbox-row">
+                <input type="checkbox" id="autoScanEnabled" name="autoScanEnabled" value="true"
+                       th:checked="${status.autoScanEnabled}">
+                <label for="autoScanEnabled">자동 스캔 사용</label>
+            </div>
+
+            <div class="form-group">
+                <label for="competitionId">대회 선택</label>
+                <select id="competitionId" name="competitionId">
+                    <option value="">선택 안 함</option>
+                    <option th:each="competition : ${competitions}"
+                            th:value="${competition.id}"
+                            th:text="${(competition.edition != null ? '제' + competition.edition + '회 ' : '') + competition.shortName}"
+                            th:selected="${status.selectedCompetitionId != null and status.selectedCompetitionId == competition.id}">
+                    </option>
+                </select>
+            </div>
+
+            <div class="form-group">
+                <label for="watchDir">감시 경로</label>
+                <input type="text" id="watchDir" th:value="${status.watchDir}" readonly>
+                <div class="meta" th:text="'안정화 대기: ' + ${status.stableWaitSeconds} + '초'"></div>
+            </div>
+
+            <div class="actions" style="margin-bottom:0;">
+                <button type="submit" class="btn btn-primary">설정 저장</button>
+                <button type="button" class="btn btn-secondary" onclick="scanNow()">지금 스캔</button>
+                <span id="scanProgress" class="meta" style="margin-top:0;"></span>
+            </div>
+        </form>
+    </div>
+
+    <div class="panel">
+        <h2>최근 처리 이력</h2>
+        <table>
+            <thead>
+            <tr>
+                <th style="width:120px;">상태</th>
+                <th>파일명</th>
+                <th style="width:90px;">결과</th>
+                <th style="width:110px;">새 엔트리</th>
+                <th>메시지</th>
+            </tr>
+            </thead>
+            <tbody>
+            <tr th:each="item : ${recentResultImports}">
+                <td th:text="${item.status}"></td>
+                <td th:text="${item.fileName}"></td>
+                <td th:text="${item.resultsCount != null ? item.resultsCount : '-'}"></td>
+                <td th:text="${item.newEntriesCount != null ? item.newEntriesCount : '-'}"></td>
+                <td th:text="${item.message != null ? item.message : '-'}"></td>
+            </tr>
+            <tr th:if="${recentResultImports.isEmpty()}">
+                <td colspan="5" style="text-align:center; color:#999;">처리 이력이 없습니다.</td>
+            </tr>
+            </tbody>
+        </table>
+    </div>
+</main>
+
+<script th:inline="javascript">
+    const SCAN_URL = /*[[@{/admin/result-import/scan}]]*/ '';
+
+    function scanNow() {
+        const progress = document.getElementById('scanProgress');
+        progress.textContent = '스캔 중...';
+        fetch(SCAN_URL, { method: 'POST' })
+            .then(r => r.json())
+            .then(data => {
+                progress.textContent = '';
+                alert('스캔 완료: 파일 ' + data.scanned + '개, 성공 ' + data.imported + '개, 스킵 ' + data.skipped + '개, 실패 ' + data.failed + '개\n' +
+                      '결과 ' + data.results + '건, 새 엔트리 ' + data.newEntries + '건');
+                location.reload();
+            })
+            .catch(err => {
+                progress.textContent = '';
+                alert('오류: ' + err.message);
+            });
+    }
+</script>
+</body>
+</html>

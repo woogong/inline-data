@@ -14,3 +14,9 @@ spring:
 app:
   upload:
     dir: /Users/batang/Developments/files/inlinedata
+  result-import:
+    watch-dir: /Users/batang/Library/CloudStorage/OneDrive-개인/posting
+    archive-dir: /Users/batang/Library/CloudStorage/OneDrive-개인/posting/archive
+    error-dir: /Users/batang/Library/CloudStorage/OneDrive-개인/posting/error
+    polling-interval-ms: 10000
+    stable-wait-seconds: 15

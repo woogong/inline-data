@@ -18,3 +18,11 @@ spring:
     hibernate:
       ddl-auto: update
     open-in-view: false
+
+app:
+  result-import:
+    watch-dir: ""
+    archive-dir: ""
+    error-dir: ""
+    polling-interval-ms: 10000
+    stable-wait-seconds: 15
