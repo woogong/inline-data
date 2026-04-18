@@ -280,22 +280,14 @@ public class EventService {
             }
         }
 
-        // 지역별 참가 선수 수 집계 (개인전만)
-        List<CompetitionEntry> allEntries = competitionEntryRepository.findIndividualEntriesWithAthlete(competitionId);
+        // 지역별 참가 선수 수 집계 (개인전만) — 단일 쿼리로 N+1 제거
         Map<String, int[]> regionAthletes = new LinkedHashMap<>(); // [일반, B조]
-        for (CompetitionEntry ce : allEntries) {
-            String region = ce.getRegion();
-            if (region == null || region.isBlank()) continue;
+        for (Object[] row : competitionEntryRepository.findRegionEntryBGroupInfo(competitionId)) {
+            String region = (String) row[0];
+            int isB = ((Number) row[2]).intValue();
             int[] counts = regionAthletes.computeIfAbsent(region, k -> new int[2]);
-            // B조 여부 확인
-            try {
-                List<HeatEntry> heatEntries = heatEntryRepository.findByEntryId(ce.getId());
-                boolean isBGroup = heatEntries.stream()
-                        .anyMatch(he -> he.getHeat().getEventRound().getEvent().getDivisionName().contains("일반(B조)"));
-                if (isBGroup) counts[1]++; else counts[0]++;
-            } catch (Exception ignored) {
-                counts[0]++;
-            }
+            if (isB == 1) counts[1]++;
+            else counts[0]++;
         }
 
         // 모든 지역 통합 (메달 없지만 선수가 있는 지역 포함)

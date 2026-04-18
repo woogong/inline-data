@@ -43,7 +43,24 @@ public interface CompetitionEntryRepository extends JpaRepository<CompetitionEnt
     Optional<CompetitionEntry> findByCompetitionIdAndAthleteNameAndGenderAndTeamName(
             Long competitionId, String athleteName, String gender, String teamName);
 
+    List<CompetitionEntry> findAllByCompetitionIdAndAthleteNameAndGenderAndTeamName(
+            Long competitionId, String athleteName, String gender, String teamName);
+
     List<CompetitionEntry> findByCompetitionIdAndAthleteIsNull(Long competitionId);
+
+    // 지역별 개인전 참가 CE 수 집계 (B조 여부 포함). N+1 해소용.
+    // 반환: [region(String), ceId(Long), isBGroup(0|1)]
+    @Query("SELECT ce.region, ce.id, " +
+           "MAX(CASE WHEN e.divisionName LIKE '%일반(B조)%' THEN 1 ELSE 0 END) " +
+           "FROM CompetitionEntry ce " +
+           "JOIN HeatEntry he ON he.entry = ce " +
+           "JOIN he.heat eh " +
+           "JOIN eh.eventRound er " +
+           "JOIN er.event e " +
+           "WHERE ce.competition.id = :compId AND e.teamEvent = false " +
+           "AND ce.region IS NOT NULL AND ce.region <> '' " +
+           "GROUP BY ce.region, ce.id")
+    List<Object[]> findRegionEntryBGroupInfo(@Param("compId") Long competitionId);
 
     List<CompetitionEntry> findByAthleteNameAndGender(String athleteName, String gender);
 

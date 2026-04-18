@@ -12,6 +12,8 @@ public interface EventResultRepository extends JpaRepository<EventResult, Long> 
 
     Optional<EventResult> findByHeatEntryId(Long heatEntryId);
 
+    void deleteByHeatEntryIdIn(List<Long> heatEntryIds);
+
     @Query("SELECT COUNT(er) FROM EventResult er WHERE er.heatEntry.heat.id IN :heatIds")
     long countByHeatIds(@Param("heatIds") List<Long> heatIds);
 
@@ -40,9 +42,9 @@ public interface EventResultRepository extends JpaRepository<EventResult, Long> 
     @Query("SELECT er FROM EventResult er " +
            "JOIN FETCH er.heatEntry he " +
            "JOIN FETCH he.entry ce " +
-           "JOIN he.heat eh " +
-           "JOIN eh.eventRound r " +
-           "JOIN r.event e " +
+           "JOIN FETCH he.heat eh " +
+           "JOIN FETCH eh.eventRound r " +
+           "JOIN FETCH r.event e " +
            "WHERE e.competition.id = :compId " +
            "AND r.round = '결승' " +
            "AND er.ranking BETWEEN 1 AND 6 " +

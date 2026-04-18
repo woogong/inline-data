@@ -43,4 +43,8 @@ public class HeatEntry {
         this.entry = entry;
         this.bibNumber = bibNumber;
     }
+
+    public void updateBib(Integer bibNumber) {
+        this.bibNumber = bibNumber;
+    }
 }
