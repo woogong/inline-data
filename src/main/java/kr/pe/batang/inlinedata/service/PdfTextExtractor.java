@@ -12,7 +12,15 @@ import java.util.concurrent.TimeUnit;
 public class PdfTextExtractor {
 
     public String extractText(Path pdfPath) throws IOException {
-        ProcessBuilder pb = new ProcessBuilder("pdftotext", "-layout", pdfPath.toString(), "-");
+        return run(pdfPath, "-layout");
+    }
+
+    public String extractTextRaw(Path pdfPath) throws IOException {
+        return run(pdfPath, "-raw");
+    }
+
+    private String run(Path pdfPath, String mode) throws IOException {
+        ProcessBuilder pb = new ProcessBuilder("pdftotext", mode, pdfPath.toString(), "-");
         pb.redirectErrorStream(true);
         Process process = pb.start();
         try {

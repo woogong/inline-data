@@ -74,7 +74,11 @@
                         <tr th:each="he : ${heatEntry.value}" class="result-row" th:attr="data-entry-id=${he.id}">
                             <td class="readonly" th:text="${he.bibNumber}"></td>
                             <td class="readonly" th:text="${he.entry.athleteName}"></td>
-                            <td class="readonly"><span th:if="${he.entry.region != null}" th:text="${he.entry.region} + ' ' + ${he.entry.teamName}"></span></td>
+                            <td class="readonly">
+                                <span th:if="${he.entry.region != null}" th:text="${he.entry.region}"></span>
+                                <span th:if="${he.entry.region != null && he.entry.teamName != null}"> </span>
+                                <span th:if="${he.entry.teamName != null}" th:text="${he.entry.teamName}"></span>
+                            </td>
                             <th:block th:with="r=${resultByEntryId[he.id]}">
                                 <td><input type="text" data-field="ranking" th:value="${r != null ? r.ranking : ''}" style="width:40px; text-align:center;"></td>
                                 <td><input type="text" data-field="record" th:value="${r != null ? r.record : ''}" placeholder="00.000"></td>

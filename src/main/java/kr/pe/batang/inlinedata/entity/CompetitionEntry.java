@@ -42,7 +42,7 @@ public class CompetitionEntry {
     @Column(length = 1)
     private String gender;
 
-    @Column(length = 20)
+    @Column(length = 100)
     private String region;
 
     @Column(length = 100)
@@ -78,6 +78,16 @@ public class CompetitionEntry {
         this.grade = grade;
         this.athlete = athlete;
         this.team = team;
+    }
+
+    public void updateFromParsed(String region, String teamName) {
+        // 기존 값이 비어있을 때만 채운다. 이미 값이 있으면 보존 (수기 수정 데이터 유지)
+        if ((this.region == null || this.region.isBlank()) && region != null && !region.isBlank()) {
+            this.region = region;
+        }
+        if ((this.teamName == null || this.teamName.isBlank()) && teamName != null && !teamName.isBlank()) {
+            this.teamName = teamName;
+        }
     }
 
     public void mapAthlete(Athlete athlete) {

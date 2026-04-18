@@ -89,7 +89,10 @@ public class AdminEventController {
             return Map.of("status", "ok", "fileName", fileName != null ? fileName : "",
                     "results", result.results(), "newEntries", result.newEntries());
         } catch (Exception e) {
-            String msg = e.getMessage() != null ? e.getMessage() : e.getClass().getSimpleName();
+            // 예외 클래스 이름 포함해서 frontend에도 보이게 (디버깅용)
+            String cause = e.getClass().getSimpleName();
+            String msg = e.getMessage() != null && !e.getMessage().isBlank()
+                    ? cause + ": " + e.getMessage() : cause;
             log.error("결과 PDF import 실패: {} - {}", fileName, msg, e);
             return Map.of("status", "error", "fileName", fileName != null ? fileName : "", "message", msg);
         }

@@ -64,7 +64,9 @@
                             <td th:text="${er.heatEntry.bibNumber}"></td>
                             <td><span class="athlete-link" th:text="${er.heatEntry.entry.athleteName}" th:attr="data-name=${er.heatEntry.entry.athleteName}"></span></td>
                             <td>
-                                <span th:if="${er.heatEntry.entry.region != null}" th:text="${er.heatEntry.entry.region} + ' ' + ${er.heatEntry.entry.teamName}"></span>
+                                <span th:if="${er.heatEntry.entry.region != null}" th:text="${er.heatEntry.entry.region}"></span>
+                                <span th:if="${er.heatEntry.entry.region != null && er.heatEntry.entry.teamName != null}"> </span>
+                                <span th:if="${er.heatEntry.entry.teamName != null}" th:text="${er.heatEntry.entry.teamName}"></span>
                                 <span th:if="${er.heatEntry.entry.grade != null}" th:text="${er.heatEntry.entry.grade}" style="color:#888; font-size:0.85rem;"></span>
                             </td>
                             <td><span th:text="${er.record}"></span>
@@ -90,7 +92,11 @@
                         <tr th:each="he : ${heatEntry.value}">
                             <td th:text="${he.bibNumber}"></td>
                             <td><span class="athlete-link" th:text="${he.entry.athleteName}" th:attr="data-name=${he.entry.athleteName}"></span></td>
-                            <td><span th:if="${he.entry.region != null}" th:text="${he.entry.region} + ' ' + ${he.entry.teamName}"></span></td>
+                            <td>
+                                <span th:if="${he.entry.region != null}" th:text="${he.entry.region}"></span>
+                                <span th:if="${he.entry.region != null && he.entry.teamName != null}"> </span>
+                                <span th:if="${he.entry.teamName != null}" th:text="${he.entry.teamName}"></span>
+                            </td>
                             <td th:text="${he.entry.grade}"></td>
                         </tr>
                     </tbody>

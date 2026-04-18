@@ -149,6 +149,7 @@ public class AutoResultImportService {
     @Transactional
     protected ProcessOutcome importFile(Path path, Long competitionId) {
         String fileName = path.getFileName().toString();
+        ResultImportFile record = null;
         try {
             if (!isStableFile(path)) {
                 return new ProcessOutcome("SKIPPED", 0, 0, "업로드 중이거나 최근 수정된 파일");
@@ -158,12 +159,14 @@ public class AutoResultImportService {
             long fileSize = Files.size(path);
             String fileHash = computeSha256(path);
 
-            if (resultImportFileRepository.existsByCompetitionIdAndFileHash(competitionId, fileHash)) {
+            ResultImportFile existing = resultImportFileRepository
+                    .findByCompetitionIdAndFileHash(competitionId, fileHash).orElse(null);
+            if (existing != null && !"PENDING".equals(existing.getStatus())) {
                 moveIfConfigured(path, resolveArchivePath(fileName));
                 return new ProcessOutcome("SKIPPED", 0, 0, "이미 처리한 파일");
             }
 
-            ResultImportFile importFile = resultImportFileRepository.save(ResultImportFile.builder()
+            record = existing != null ? existing : resultImportFileRepository.save(ResultImportFile.builder()
                     .competitionId(competitionId)
                     .fileName(fileName)
                     .filePath(path.toAbsolutePath().toString())
@@ -175,19 +178,26 @@ public class AutoResultImportService {
 
             ResultParsingService.ImportResult result = resultParsingService.parseResultPdf(path, competitionId);
             if (result.filesProcessed() == 0 || result.results() == 0) {
-                importFile.markSkipped("처리 대상 결과가 없거나 경기 매칭에 실패했습니다.");
+                record.markSkipped("처리 대상 결과가 없거나 경기 매칭에 실패했습니다.");
+                resultImportFileRepository.save(record);
                 moveIfConfigured(path, resolveErrorPath(fileName));
-                return new ProcessOutcome("SKIPPED", 0, 0, importFile.getMessage());
+                return new ProcessOutcome("SKIPPED", 0, 0, record.getMessage());
             }
 
-            importFile.markSuccess(result.results(), result.newEntries(), null);
+            record.markSuccess(result.results(), result.newEntries(), null);
+            resultImportFileRepository.save(record);
             moveIfConfigured(path, resolveArchivePath(fileName));
             log.info("자동 결과 등록 성공: {} -> 결과 {}건, 새 엔트리 {}건",
                     fileName, result.results(), result.newEntries());
             return new ProcessOutcome("SUCCESS", result.results(), result.newEntries(), null);
         } catch (Exception e) {
             String message = shortenMessage(e.getMessage() != null ? e.getMessage() : e.getClass().getSimpleName());
-            saveFailureRecord(path, competitionId, message);
+            if (record != null) {
+                record.markFailed(message);
+                resultImportFileRepository.save(record);
+            } else {
+                saveFailureRecord(path, competitionId, message);
+            }
             moveIfConfigured(path, resolveErrorPath(fileName));
             log.error("자동 결과 등록 실패: {} - {}", fileName, message, e);
             return new ProcessOutcome("FAILED", 0, 0, message);
@@ -209,9 +219,10 @@ public class AutoResultImportService {
                     .fileHash(fileHash)
                     .fileSize(fileSize)
                     .sourceLastModifiedAt(modifiedAt)
-                    .status("PENDING")
+                    .status("FAILED")
+                    .message(message)
+                    .processedAt(LocalDateTime.now())
                     .build());
-            importFile.markFailed(message);
         } catch (Exception saveEx) {
             log.warn("실패 이력 저장 실패: {} - {}", path, saveEx.getMessage());
         }
@@ -291,7 +302,17 @@ public class AutoResultImportService {
         try {
             Files.createDirectories(target.getParent());
             Path finalTarget = ensureUniqueTarget(target);
-            Files.move(source, finalTarget, StandardCopyOption.REPLACE_EXISTING);
+            try {
+                Files.move(source, finalTarget, StandardCopyOption.REPLACE_EXISTING);
+            } catch (IOException moveEx) {
+                // OneDrive 등 클라우드 동기화 폴더에서는 rename이 차단될 수 있으므로 copy 후 삭제 시도
+                Files.copy(source, finalTarget, StandardCopyOption.REPLACE_EXISTING);
+                try {
+                    Files.deleteIfExists(source);
+                } catch (IOException deleteEx) {
+                    log.debug("원본 파일 삭제 실패 (해시 기반 중복 체크로 재처리 방지됨): {}", source);
+                }
+            }
         } catch (IOException e) {
             log.warn("자동 결과 파일 이동 실패: {} -> {} ({})", source, target, e.getMessage());
         }

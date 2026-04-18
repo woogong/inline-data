@@ -23,6 +23,7 @@ import java.util.List;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyString;
+import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.BDDMockito.given;
 import static org.mockito.BDDMockito.then;
@@ -59,7 +60,7 @@ class AutoResultImportServiceTest {
         Files.setLastModifiedTime(pdf, FileTime.from(Instant.now().minusSeconds(60)));
 
         configureService(watchDir, archiveDir, tempDir.resolve("error"), 10L);
-        given(resultImportFileRepository.existsByCompetitionIdAndFileHash(eq(10L), anyString())).willReturn(false);
+        given(resultImportFileRepository.findByCompetitionIdAndFileHash(eq(10L), anyString())).willReturn(java.util.Optional.empty());
         given(resultImportFileRepository.save(any(ResultImportFile.class)))
                 .willAnswer(invocation -> invocation.getArgument(0));
         given(resultParsingService.parseResultPdf(any(Path.class), any(Long.class)))
@@ -86,7 +87,7 @@ class AutoResultImportServiceTest {
         Files.setLastModifiedTime(pdf, FileTime.from(Instant.now().minusSeconds(60)));
 
         configureService(watchDir, archiveDir, tempDir.resolve("error"), 8L);
-        given(resultImportFileRepository.existsByCompetitionIdAndFileHash(eq(8L), anyString())).willReturn(false);
+        given(resultImportFileRepository.findByCompetitionIdAndFileHash(eq(8L), anyString())).willReturn(java.util.Optional.empty());
         given(resultImportFileRepository.save(any(ResultImportFile.class)))
                 .willAnswer(invocation -> invocation.getArgument(0));
         given(resultParsingService.parseResultPdf(any(Path.class), eq(8L)))
@@ -110,7 +111,9 @@ class AutoResultImportServiceTest {
         Files.setLastModifiedTime(pdf, FileTime.from(Instant.now().minusSeconds(60)));
 
         configureService(watchDir, archiveDir, tempDir.resolve("error"), 3L);
-        given(resultImportFileRepository.existsByCompetitionIdAndFileHash(eq(3L), anyString())).willReturn(true);
+        given(resultImportFileRepository.findByCompetitionIdAndFileHash(eq(3L), anyString())).willReturn(java.util.Optional.of(
+                ResultImportFile.builder().competitionId(3L).fileName("2-result.pdf").filePath("/tmp/2-result.pdf")
+                        .fileHash("abc").fileSize(5L).status("SUCCESS").build()));
 
         AutoResultImportService.ScanSummary result = autoResultImportService.scanAndImport(3L);
 
@@ -170,7 +173,7 @@ class AutoResultImportServiceTest {
                         .autoScanEnabled(true)
                         .competitionId(7L)
                         .build()));
-        given(resultImportFileRepository.existsByCompetitionIdAndFileHash(eq(7L), anyString())).willReturn(false);
+        given(resultImportFileRepository.findByCompetitionIdAndFileHash(eq(7L), anyString())).willReturn(java.util.Optional.empty());
         given(resultImportFileRepository.save(any(ResultImportFile.class)))
                 .willAnswer(invocation -> invocation.getArgument(0));
         given(resultParsingService.parseResultPdf(any(Path.class), eq(7L)))
