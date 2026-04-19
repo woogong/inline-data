@@ -4,7 +4,9 @@ spring:
     driver-class-name: org.h2.Driver
   jpa:
     hibernate:
-      ddl-auto: create-drop
+      ddl-auto: create-drop      # 테스트는 매 실행마다 H2에 스키마 재생성
     properties:
       hibernate:
         dialect: org.hibernate.dialect.H2Dialect
+  flyway:
+    enabled: false               # 테스트에서는 Flyway 비활성화. MariaDB 전용 마이그레이션 SQL을 H2로 돌릴 필요 없음
