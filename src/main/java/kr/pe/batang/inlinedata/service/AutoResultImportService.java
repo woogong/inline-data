@@ -221,7 +221,7 @@ public class AutoResultImportService {
                     fileName, result.results(), result.newEntries());
             return new ProcessOutcome("SUCCESS", result.results(), result.newEntries(), null);
         } catch (Exception e) {
-            String message = shortenMessage(e.getMessage() != null ? e.getMessage() : e.getClass().getSimpleName());
+            String message = shortenMessage(describeFailure(e));
             if (record != null) {
                 record.markFailed(message);
                 resultImportFileRepository.save(record);
@@ -229,9 +229,32 @@ public class AutoResultImportService {
                 saveFailureRecord(path, competitionId, message);
             }
             moveIfConfigured(path, resolveErrorPath(fileName));
+            // 마지막 인자로 넘기는 예외는 SLF4J가 풀 스택트레이스로 로깅한다.
             log.error("자동 결과 등록 실패: {} - {}", fileName, message, e);
             return new ProcessOutcome("FAILED", 0, 0, message);
         }
+    }
+
+    /**
+     * 예외를 "클래스: 메시지 ← 원인클래스: 원인메시지 ← ..." 형태로 정리.
+     * DB message 컬럼과 로그 단일 라인 모두에 담기 위한 요약 문자열.
+     * 원인 체인은 무한루프 방지를 위해 최대 4단계까지만 따라간다.
+     */
+    private String describeFailure(Throwable e) {
+        StringBuilder sb = new StringBuilder();
+        Throwable current = e;
+        int depth = 0;
+        while (current != null && depth < 4) {
+            if (depth > 0) sb.append(" ← ");
+            sb.append(current.getClass().getSimpleName());
+            if (current.getMessage() != null && !current.getMessage().isBlank()) {
+                sb.append(": ").append(current.getMessage());
+            }
+            if (current.getCause() == current) break;  // self-reference 가드
+            current = current.getCause();
+            depth++;
+        }
+        return sb.toString();
     }
 
     private void saveFailureRecord(Path path, Long competitionId, String message) {

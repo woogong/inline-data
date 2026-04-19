@@ -61,17 +61,16 @@ public class PdfTextExtractor {
         } catch (TimeoutException e) {
             process.destroyForcibly();
             reader.cancel(true);
-            log.warn("pdftotext 타임아웃 ({}초 초과): {}", PROCESS_TIMEOUT_SECONDS, pdfPath.getFileName());
-            return null;
+            throw new IOException("pdftotext " + mode + " 모드 타임아웃 (" + PROCESS_TIMEOUT_SECONDS + "초 초과): "
+                    + pdfPath.getFileName());
         } catch (InterruptedException e) {
             process.destroyForcibly();
             reader.cancel(true);
             Thread.currentThread().interrupt();
-            return null;
+            throw new IOException("pdftotext " + mode + " 실행 중 인터럽트: " + pdfPath.getFileName(), e);
         } catch (ExecutionException e) {
             process.destroyForcibly();
-            log.warn("pdftotext stdout 읽기 실패: {} - {}", pdfPath.getFileName(), e.getCause());
-            return null;
+            throw new IOException("pdftotext " + mode + " stdout 읽기 실패: " + pdfPath.getFileName(), e.getCause());
         }
     }
 }
