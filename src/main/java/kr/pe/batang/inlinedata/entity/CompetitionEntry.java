@@ -10,7 +10,6 @@ import jakarta.persistence.Id;
 import jakarta.persistence.JoinColumn;
 import jakarta.persistence.ManyToOne;
 import jakarta.persistence.Table;
-import jakarta.persistence.UniqueConstraint;
 import lombok.AccessLevel;
 import lombok.Builder;
 import lombok.Getter;
@@ -21,11 +20,11 @@ import org.springframework.data.jpa.domain.support.AuditingEntityListener;
 
 import java.time.LocalDateTime;
 
+// (competition_id, athlete_name, gender, team_name) UK는 기존 레거시 데이터에 35건의 중복 그룹이
+// 있어 DB 레벨로는 걸지 않는다. findOrCreateCompetitionEntry가 "가장 오래된 id를 재사용"하는 방식으로
+// 신규 중복을 방지한다.
 @Entity
-@Table(name = "competition_entry",
-        uniqueConstraints = @UniqueConstraint(
-                name = "uk_ce_competition_name_gender_team",
-                columnNames = {"competition_id", "athlete_name", "gender", "team_name"}))
+@Table(name = "competition_entry")
 @Getter
 @NoArgsConstructor(access = AccessLevel.PROTECTED)
 @EntityListeners(AuditingEntityListener.class)
