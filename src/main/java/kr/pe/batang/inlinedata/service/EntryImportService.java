@@ -230,15 +230,16 @@ public class EntryImportService {
                                                           String athleteName, String gender,
                                                           String region, String teamName,
                                                           Integer grade) {
+        String normalizedTeam = CompetitionEntry.normalizeTeamName(teamName);
         return competitionEntryRepository
                 .findByCompetitionIdAndAthleteNameAndGenderAndTeamName(
-                        competition.getId(), athleteName, gender, teamName)
+                        competition.getId(), athleteName, gender, normalizedTeam)
                 .orElseGet(() -> competitionEntryRepository.save(CompetitionEntry.builder()
                         .competition(competition)
                         .athleteName(athleteName)
                         .gender(gender)
                         .region(region)
-                        .teamName(teamName)
+                        .teamName(normalizedTeam)
                         .grade(grade)
                         .build()));
     }

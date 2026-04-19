@@ -18,6 +18,7 @@ import kr.pe.batang.inlinedata.service.parser.DivisionNormalizer;
 import kr.pe.batang.inlinedata.service.parser.LayoutResultLineParser;
 import kr.pe.batang.inlinedata.service.parser.LinePreprocessor;
 import kr.pe.batang.inlinedata.service.parser.ParsedResult;
+import kr.pe.batang.inlinedata.service.parser.ParsedResultValidator;
 import kr.pe.batang.inlinedata.service.parser.RawResultLineParser;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -147,17 +148,23 @@ public class ResultParsingService {
         }
 
         // 결과 파싱. 개인전은 -raw 모드(공백 겹침 없음), 단체전은 -layout(기존 로직 유지)
-        List<ParsedResult> results;
+        List<ParsedResult> parsedResults;
         if (isTeamEvent) {
-            results = LayoutResultLineParser.parseTeam(lines);
+            parsedResults = LayoutResultLineParser.parseTeam(lines);
         } else {
             String rawText = pdfTextExtractor.extractTextRaw(pdfPath);
             if (rawText != null && !rawText.isBlank()) {
-                results = RawResultLineParser.parse(rawText.split("\n"));
+                parsedResults = RawResultLineParser.parse(rawText.split("\n"));
             } else {
-                results = LayoutResultLineParser.parseIndividual(lines);
+                parsedResults = LayoutResultLineParser.parseIndividual(lines);
             }
         }
+        // 검증 통과한 결과만 DB 저장 대상으로. 유효하지 않은 행은 폐기되어 phantom 엔트리 유입 방지.
+        List<ParsedResult> results = parsedResults.stream()
+                .map(ParsedResultValidator::validate)
+                .filter(java.util.Objects::nonNull)
+                .toList();
+
         int resultCount = 0;
         int newEntryCount = 0;
         Long compId = targetRound.getEvent().getCompetition().getId();
@@ -166,19 +173,21 @@ public class ResultParsingService {
 
         for (ParsedResult pr : results) {
             // 이름 매칭만 사용: 같은 bib에 다른 선수가 배치되어도 "새 선수"로 취급
-            HeatEntry heatEntry = null;
-            if (pr.athleteName() != null) {
-                heatEntry = entryByName.get(pr.athleteName().trim());
-            }
+            HeatEntry heatEntry = entryByName.get(pr.athleteName());
 
             if (heatEntry != null) {
-                // 재사용. bib이 바뀌었으면 업데이트
+                // 재사용. bib이 바뀌었으면 업데이트 (heat_id,bib_number UK 충돌 방지)
                 if (heatEntry.getBibNumber() == null || heatEntry.getBibNumber().intValue() != pr.bibNumber()) {
+                    evictBibConflict(pr.bibNumber(), heatEntry,
+                            entryByBib, entryByName, entryByCeId, matchedHeatEntryIds);
                     entryByBib.remove(heatEntry.getBibNumber());
                     heatEntry.updateBib(pr.bibNumber());
+                    // Hibernate는 flush 시 INSERT → UPDATE → DELETE 순이라 bib swap 시나리오에서
+                    // 뒤따르는 INSERT가 아직 flush되지 않은 UPDATE와 UK 충돌을 낼 수 있다. 즉시 flush하여 순서 고정.
+                    heatEntryRepository.flush();
                     entryByBib.put(pr.bibNumber(), heatEntry);
                 }
-            } else if (pr.athleteName() != null) {
+            } else {
                 // 이름 매칭 실패 → CompetitionEntry 조회/생성
                 CompetitionEntry compEntry = findOrCreateCompetitionEntry(
                         compId, pr.athleteName(), gender, pr.region(), pr.teamName());
@@ -189,21 +198,25 @@ public class ResultParsingService {
                 if (existing != null) {
                     heatEntry = existing;
                     if (heatEntry.getBibNumber() == null || heatEntry.getBibNumber().intValue() != pr.bibNumber()) {
+                        evictBibConflict(pr.bibNumber(), heatEntry,
+                                entryByBib, entryByName, entryByCeId, matchedHeatEntryIds);
                         entryByBib.remove(heatEntry.getBibNumber());
                         heatEntry.updateBib(pr.bibNumber());
+                        heatEntryRepository.flush();
                         entryByBib.put(pr.bibNumber(), heatEntry);
                     }
                 } else {
+                    evictBibConflict(pr.bibNumber(), null,
+                            entryByBib, entryByName, entryByCeId, matchedHeatEntryIds);
                     heatEntry = heatEntryRepository.save(HeatEntry.builder()
                             .heat(targetHeat).entry(compEntry).bibNumber(pr.bibNumber()).build());
                     entryByBib.put(pr.bibNumber(), heatEntry);
                     if (compEntry.getId() != null) entryByCeId.put(compEntry.getId(), heatEntry);
                     newEntryCount++;
                 }
-                entryByName.put(pr.athleteName().trim(), heatEntry);
+                entryByName.put(pr.athleteName(), heatEntry);
             }
 
-            if (heatEntry == null) continue;
             matchedHeatEntryIds.add(heatEntry.getId());
 
             // 재임포트 시 기존 CompetitionEntry의 소속/시도도 최신 파싱 결과로 업데이트 (아직 매핑되지 않은 경우에만)
@@ -264,12 +277,38 @@ public class ResultParsingService {
         log.info("DTT rankings recalculated for round {}: {} results", eventRoundId, allResults.size());
     }
 
+    /**
+     * 같은 heat 안에서 bib가 다른 HeatEntry에 선점돼 있으면 그 HeatEntry와 결과를 삭제해 (heat_id, bib_number) UK 충돌을 막는다.
+     * owner는 이번 결과를 담을 HeatEntry(없으면 null): 자기 자신은 건드리지 않는다.
+     *
+     * 삭제된 엔트리는 이번 파싱 결과에서 다른 선수로 교체될 대상이다. CompetitionEntry는 보존되고
+     * 이후 이름 매칭 실패로 같은 CE를 재사용하는 로직(entryByCeId)이 HeatEntry를 재생성한다.
+     */
+    private void evictBibConflict(Integer bib, HeatEntry owner,
+                                  Map<Integer, HeatEntry> entryByBib,
+                                  Map<String, HeatEntry> entryByName,
+                                  Map<Long, HeatEntry> entryByCeId,
+                                  Set<Long> matchedHeatEntryIds) {
+        HeatEntry conflict = entryByBib.get(bib);
+        if (conflict == null || conflict == owner) return;
+
+        eventResultRepository.deleteByHeatEntryIdIn(List.of(conflict.getId()));
+        heatEntryRepository.delete(conflict);
+        heatEntryRepository.flush();
+
+        entryByBib.remove(bib);
+        entryByName.values().removeIf(he -> he == conflict);
+        entryByCeId.values().removeIf(he -> he == conflict);
+        matchedHeatEntryIds.remove(conflict.getId());
+    }
+
     private CompetitionEntry findOrCreateCompetitionEntry(Long competitionId, String athleteName,
                                                           String gender, String region, String teamName) {
+        String normalizedTeam = CompetitionEntry.normalizeTeamName(teamName);
         // 과거 버그로 중복 CE가 존재할 수 있어 List로 조회해 가장 오래된 것(최소 id) 사용
         List<CompetitionEntry> found = competitionEntryRepository
                 .findAllByCompetitionIdAndAthleteNameAndGenderAndTeamName(
-                        competitionId, athleteName, gender, teamName != null ? teamName : "");
+                        competitionId, athleteName, gender, normalizedTeam);
         if (!found.isEmpty()) {
             return found.stream().min(Comparator.comparing(CompetitionEntry::getId)).orElseThrow();
         }
@@ -277,7 +316,7 @@ public class ResultParsingService {
                 .orElseThrow(() -> new IllegalArgumentException("대회를 찾을 수 없습니다. id=" + competitionId));
         return competitionEntryRepository.save(CompetitionEntry.builder()
                 .competition(competition)
-                .athleteName(athleteName).gender(gender).region(region).teamName(teamName).build());
+                .athleteName(athleteName).gender(gender).region(region).teamName(normalizedTeam).build());
     }
 
 }

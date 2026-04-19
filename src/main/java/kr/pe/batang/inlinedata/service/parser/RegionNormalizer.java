@@ -1,5 +1,6 @@
 package kr.pe.batang.inlinedata.service.parser;
 
+import java.util.HashSet;
 import java.util.Map;
 import java.util.Set;
 
@@ -27,6 +28,14 @@ public final class RegionNormalizer {
             Map.entry("FRA", "프랑스"), Map.entry("ITA", "이탈리아"), Map.entry("ESP", "스페인"),
             Map.entry("GBR", "영국"), Map.entry("NED", "네덜란드"), Map.entry("BEL", "벨기에"));
 
+    /** 정규화된 유효 지역 전체 집합 (한국 시도 ∪ IOC 매핑의 한글 국명). */
+    private static final Set<String> VALID_REGIONS;
+    static {
+        Set<String> s = new HashSet<>(KOREAN_REGIONS);
+        s.addAll(CODE_TO_KOREAN.values());
+        VALID_REGIONS = Set.copyOf(s);
+    }
+
     /** IOC 코드면 한글 국명으로 변환, 아니면 입력값 그대로 반환. */
     public static String normalize(String region) {
         if (region == null) return null;
@@ -36,5 +45,10 @@ public final class RegionNormalizer {
 
     public static boolean isValidKoreanRegion(String region) {
         return region != null && KOREAN_REGIONS.contains(region);
+    }
+
+    /** 정규화된 지역명이 유효한지 (한국 시도 또는 알려진 국명) 확인. */
+    public static boolean isValidRegion(String region) {
+        return region != null && VALID_REGIONS.contains(region);
     }
 }

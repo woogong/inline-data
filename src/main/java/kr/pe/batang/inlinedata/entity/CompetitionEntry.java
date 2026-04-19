@@ -10,6 +10,7 @@ import jakarta.persistence.Id;
 import jakarta.persistence.JoinColumn;
 import jakarta.persistence.ManyToOne;
 import jakarta.persistence.Table;
+import jakarta.persistence.UniqueConstraint;
 import lombok.AccessLevel;
 import lombok.Builder;
 import lombok.Getter;
@@ -21,7 +22,10 @@ import org.springframework.data.jpa.domain.support.AuditingEntityListener;
 import java.time.LocalDateTime;
 
 @Entity
-@Table(name = "competition_entry")
+@Table(name = "competition_entry",
+        uniqueConstraints = @UniqueConstraint(
+                name = "uk_ce_competition_name_gender_team",
+                columnNames = {"competition_id", "athlete_name", "gender", "team_name"}))
 @Getter
 @NoArgsConstructor(access = AccessLevel.PROTECTED)
 @EntityListeners(AuditingEntityListener.class)
@@ -45,7 +49,7 @@ public class CompetitionEntry {
     @Column(length = 100)
     private String region;
 
-    @Column(length = 100)
+    @Column(length = 100, nullable = false)
     private String teamName;
 
     private Integer grade;
@@ -74,7 +78,7 @@ public class CompetitionEntry {
         this.athleteName = athleteName;
         this.gender = gender;
         this.region = region;
-        this.teamName = teamName;
+        this.teamName = normalizeTeamName(teamName);
         this.grade = grade;
         this.athlete = athlete;
         this.team = team;
@@ -85,9 +89,17 @@ public class CompetitionEntry {
         if ((this.region == null || this.region.isBlank()) && region != null && !region.isBlank()) {
             this.region = region;
         }
-        if ((this.teamName == null || this.teamName.isBlank()) && teamName != null && !teamName.isBlank()) {
+        if (this.teamName.isBlank() && teamName != null && !teamName.isBlank()) {
             this.teamName = teamName;
         }
+    }
+
+    /**
+     * teamName을 DB 저장 및 조회에 일관된 형태로 정규화.
+     * UK (competition_id, athlete_name, gender, team_name)에서 NULL이 중복 허용되는 것을 막기 위해 빈 문자열로 통일.
+     */
+    public static String normalizeTeamName(String teamName) {
+        return teamName == null ? "" : teamName.trim();
     }
 
     public void mapAthlete(Athlete athlete) {

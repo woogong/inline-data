@@ -17,7 +17,10 @@ import lombok.NoArgsConstructor;
 
 @Entity
 @Table(name = "heat_entry",
-        uniqueConstraints = @UniqueConstraint(columnNames = {"heat_id", "entry_id"}))
+        uniqueConstraints = {
+                @UniqueConstraint(name = "uk_he_heat_entry", columnNames = {"heat_id", "entry_id"}),
+                @UniqueConstraint(name = "uk_he_heat_bib", columnNames = {"heat_id", "bib_number"})
+        })
 @Getter
 @NoArgsConstructor(access = AccessLevel.PROTECTED)
 public class HeatEntry {

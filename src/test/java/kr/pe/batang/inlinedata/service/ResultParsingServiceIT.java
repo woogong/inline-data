@@ -192,6 +192,78 @@ class ResultParsingServiceIT {
     }
 
     @Test
+    @DisplayName("두 선수가 bib를 맞바꾼 경우 — (heat_id,bib_number) UK 충돌 없이 반영")
+    void bibSwapBetweenAthletes() throws IOException {
+        // given: 첫 파싱 — 길동이=31, 채훈이=45, 민수이=12
+        eventRepository.save(Event.builder()
+                .competition(competition).divisionName("남중부").gender("M")
+                .eventName("500m+D").teamEvent(false).build());
+        mockPdfExtraction("individual_time_race");
+        resultParsingService.parseResultPdf(dummyPath("individual_time_race.pdf"), competition.getId());
+
+        // when: 길동이와 채훈이가 bib 맞바꿈 (31 ↔ 45)
+        String swappedRaw = """
+                2026 테스트 오픈 인라인 대회
+                테스트시
+                4-7 남자중학부(Men.Middle School) 500m+D
+                예선7조(Heat Series - 7 Heats)
+                순위
+                등번호
+                이름
+                소속
+                기록
+                서울테스트클럽 1 45 길동이 Q 46.993
+                세종테스트클럽 2 31 채훈이 51.671
+                부산테스트클럽 3 12 민수이 52.001
+                """;
+        String layout = readFixture("individual_time_race.layout.txt")
+                .replace(" 1     31    길동이", " 1     45    길동이")
+                .replace(" 2     45    채훈이", " 2     31    채훈이");
+        given(pdfTextExtractor.extractText(any())).willReturn(layout);
+        given(pdfTextExtractor.extractTextRaw(any())).willReturn(swappedRaw);
+        resultParsingService.parseResultPdf(dummyPath("individual_time_race.pdf"), competition.getId());
+
+        // then: UK 충돌 없이 swap 반영
+        List<HeatEntry> entries = heatEntryRepository.findAll();
+        assertThat(entries).hasSize(3);
+        HeatEntry gildong = entries.stream()
+                .filter(e -> "길동이".equals(e.getEntry().getAthleteName())).findFirst().orElseThrow();
+        HeatEntry chaehun = entries.stream()
+                .filter(e -> "채훈이".equals(e.getEntry().getAthleteName())).findFirst().orElseThrow();
+        assertThat(gildong.getBibNumber()).isEqualTo(45);
+        assertThat(chaehun.getBibNumber()).isEqualTo(31);
+    }
+
+    @Test
+    @DisplayName("유효하지 않은 region은 제거되고 결과는 저장됨 (validator)")
+    void invalidRegionStrippedOnImport() throws IOException {
+        eventRepository.save(Event.builder()
+                .competition(competition).divisionName("남중부").gender("M")
+                .eventName("500m+D").teamEvent(false).build());
+        // region 칸에 미매핑 IOC 코드 "XYZ"가 들어간 가상 시나리오 (RAW_LINE 매칭 통과하나 validator에서 제거됨)
+        String rawWithBadRegion = """
+                2026 테스트 오픈 인라인 대회
+                테스트시
+                4-7 남자중학부(Men.Middle School) 500m+D
+                예선7조
+                순위
+                등번호
+                이름
+                소속
+                기록
+                서울테스트클럽 1 31 길동이 Q 46.993 XYZ
+                """;
+        given(pdfTextExtractor.extractText(any())).willReturn(readFixture("individual_time_race.layout.txt"));
+        given(pdfTextExtractor.extractTextRaw(any())).willReturn(rawWithBadRegion);
+        resultParsingService.parseResultPdf(dummyPath("individual_time_race.pdf"), competition.getId());
+
+        List<HeatEntry> entries = heatEntryRepository.findAll();
+        assertThat(entries).hasSize(1);
+        assertThat(entries.get(0).getEntry().getAthleteName()).isEqualTo("길동이");
+        assertThat(entries.get(0).getEntry().getRegion()).isNull();   // 'XYZ'는 region 화이트리스트에 없어 제거됨
+    }
+
+    @Test
     @DisplayName("재임포트 시 결과에 없는 사전 HeatEntry는 제거됨")
     void reimportRemovesUnmatchedEntries() throws IOException {
         // given: 첫 파싱으로 3명 등록

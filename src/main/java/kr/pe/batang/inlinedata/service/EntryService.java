@@ -59,15 +59,16 @@ public class EntryService {
         Competition competition = event.getCompetition();
 
         // 텍스트 기반으로 CompetitionEntry 찾거나 생성 (FK 없이)
+        String normalizedTeam = CompetitionEntry.normalizeTeamName(teamName);
         CompetitionEntry compEntry = competitionEntryRepository
                 .findByCompetitionIdAndAthleteNameAndGenderAndTeamName(
-                        competition.getId(), athleteName.trim(), gender, teamName != null ? teamName.trim() : "")
+                        competition.getId(), athleteName.trim(), gender, normalizedTeam)
                 .orElseGet(() -> competitionEntryRepository.save(CompetitionEntry.builder()
                         .competition(competition)
                         .athleteName(athleteName.trim())
                         .gender(gender)
                         .region(region != null ? region.trim() : null)
-                        .teamName(teamName != null ? teamName.trim() : null)
+                        .teamName(normalizedTeam)
                         .build()));
 
         Optional<HeatEntry> existing = heatEntryRepository
