@@ -56,15 +56,8 @@ public class ApiAthleteController {
                                        @RequestParam(defaultValue = "0") int page,
                                        @RequestParam(defaultValue = "20") int size) {
         Athlete athlete = athleteService.findById(id);
-        AthleteService.AthleteProfileDto profile;
-        List<AthleteService.PerformanceDto> allPerformances;
-        try {
-            profile = athleteService.findLatestProfile(id);
-            allPerformances = athleteService.findPerformances(id);
-        } catch (Exception e) {
-            profile = new AthleteService.AthleteProfileDto(null, null, null);
-            allPerformances = List.of();
-        }
+        AthleteService.AthleteProfileDto profile = athleteService.findLatestProfile(id);
+        List<AthleteService.PerformanceDto> allPerformances = athleteService.findPerformances(id);
 
         int start = Math.min(page * size, allPerformances.size());
         int end = Math.min(start + size, allPerformances.size());

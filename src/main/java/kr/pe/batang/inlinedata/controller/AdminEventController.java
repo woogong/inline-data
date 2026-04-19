@@ -74,27 +74,21 @@ public class AdminEventController {
     @PostMapping("/import-result")
     @ResponseBody
     public Map<String, Object> importResultAtListLevel(@PathVariable Long compId,
-                                                       @RequestParam("file") MultipartFile file) {
+                                                       @RequestParam("file") MultipartFile file) throws java.io.IOException {
         String fileName = file.getOriginalFilename();
+        Path temp = Files.createTempFile("result-", ".pdf");
+        try (var out = Files.newOutputStream(temp)) {
+            file.getInputStream().transferTo(out);
+            out.flush();
+        }
         try {
-            Path temp = Files.createTempFile("result-", ".pdf");
-            try (var out = Files.newOutputStream(temp)) {
-                file.getInputStream().transferTo(out);
-                out.flush();
-            }
             var result = resultParsingService.parseResultPdf(temp, compId);
-            Files.deleteIfExists(temp);
             log.info("결과 PDF import 성공: {} → 결과 {}건, 새 엔트리 {}건",
                     fileName, result.results(), result.newEntries());
             return Map.of("status", "ok", "fileName", fileName != null ? fileName : "",
                     "results", result.results(), "newEntries", result.newEntries());
-        } catch (Exception e) {
-            // 예외 클래스 이름 포함해서 frontend에도 보이게 (디버깅용)
-            String cause = e.getClass().getSimpleName();
-            String msg = e.getMessage() != null && !e.getMessage().isBlank()
-                    ? cause + ": " + e.getMessage() : cause;
-            log.error("결과 PDF import 실패: {} - {}", fileName, msg, e);
-            return Map.of("status", "error", "fileName", fileName != null ? fileName : "", "message", msg);
+        } finally {
+            Files.deleteIfExists(temp);
         }
     }
 
@@ -111,19 +105,17 @@ public class AdminEventController {
     @PostMapping("/{eventId}/import-result")
     @ResponseBody
     public Map<String, Object> importResultFile(@PathVariable Long compId, @PathVariable Long eventId,
-                                                @RequestParam("file") MultipartFile file) {
+                                                @RequestParam("file") MultipartFile file) throws java.io.IOException {
+        Path temp = Files.createTempFile("result-", ".pdf");
+        try (var out = Files.newOutputStream(temp)) {
+            file.getInputStream().transferTo(out);
+            out.flush();
+        }
         try {
-            Path temp = Files.createTempFile("result-", ".pdf");
-            try (var out = Files.newOutputStream(temp)) {
-                file.getInputStream().transferTo(out);
-                out.flush();
-            }
             var result = resultParsingService.parseResultPdf(temp, compId);
-            Files.deleteIfExists(temp);
             return Map.of("status", "ok", "results", result.results(), "newEntries", result.newEntries());
-        } catch (Exception e) {
-            log.error("결과 PDF import 실패: {}", file.getOriginalFilename(), e);
-            return Map.of("status", "error", "message", e.getMessage());
+        } finally {
+            Files.deleteIfExists(temp);
         }
     }
 
@@ -268,20 +260,17 @@ public class AdminEventController {
     @PostMapping("/import")
     public String importEntry(@PathVariable Long compId,
                               @RequestParam("file") MultipartFile file,
-                              RedirectAttributes redirectAttributes) {
+                              RedirectAttributes redirectAttributes) throws java.io.IOException {
+        Path tempFile = Files.createTempFile("entry-import-", ".pdf");
+        file.transferTo(tempFile);
         try {
-            Path tempFile = Files.createTempFile("entry-import-", ".pdf");
-            file.transferTo(tempFile);
             var competition = competitionService.findById(compId);
             var result = entryImportService.importEntryPdf(tempFile, competition);
-            Files.deleteIfExists(tempFile);
             redirectAttributes.addFlashAttribute("message",
                     String.format("종목 %d개, 경기 %d개, 조 %d개, 엔트리 %d건을 가져왔습니다.",
                             result.events(), result.rounds(), result.heats(), result.entries()));
-        } catch (Exception e) {
-            log.error("조편성 import 실패", e);
-            redirectAttributes.addFlashAttribute("errorMessage",
-                    "파일 처리 중 오류: " + e.getMessage());
+        } finally {
+            Files.deleteIfExists(tempFile);
         }
         return "redirect:/admin/competitions/" + compId + "/events";
     }

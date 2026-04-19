@@ -245,22 +245,6 @@ public class ResultParsingService {
         return new ImportResult(resultCount, newEntryCount, 1);
     }
 
-    @Transactional
-    public ImportResult parseMultipleFiles(List<Path> pdfPaths, Long competitionId) {
-        int totalResults = 0, totalNewEntries = 0, totalFiles = 0;
-        for (Path path : pdfPaths) {
-            try {
-                ImportResult r = parseResultPdf(path, competitionId);
-                totalResults += r.results();
-                totalNewEntries += r.newEntries();
-                totalFiles += r.filesProcessed();
-            } catch (Exception e) {
-                log.warn("Failed to parse {}: {}", path.getFileName(), e.getMessage());
-            }
-        }
-        return new ImportResult(totalResults, totalNewEntries, totalFiles);
-    }
-
     private void recalculateDttRankings(Long eventRoundId) {
         List<EventHeat> heats = eventHeatRepository.findByEventRoundIdOrderByHeatNumberAsc(eventRoundId);
         if (heats.isEmpty()) return;

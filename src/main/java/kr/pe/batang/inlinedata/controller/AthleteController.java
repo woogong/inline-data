@@ -24,13 +24,8 @@ public class AthleteController {
     @GetMapping("/{id}")
     public String detail(@PathVariable Long id, Model model) {
         model.addAttribute("athlete", athleteService.findById(id));
-        try {
-            model.addAttribute("profile", athleteService.findLatestProfile(id));
-            model.addAttribute("performances", athleteService.findPerformances(id));
-        } catch (Exception e) {
-            model.addAttribute("profile", new AthleteService.AthleteProfileDto(null, null, null));
-            model.addAttribute("performances", java.util.List.of());
-        }
+        model.addAttribute("profile", athleteService.findLatestProfile(id));
+        model.addAttribute("performances", athleteService.findPerformances(id));
         return "athlete/detail";
     }
 }
