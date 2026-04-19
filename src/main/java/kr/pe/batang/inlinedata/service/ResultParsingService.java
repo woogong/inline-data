@@ -72,7 +72,22 @@ public class ResultParsingService {
         String eventName = null;
         String genderChar = null;
         int headerLineIdx = -1;
-        Pattern fullHeader = Pattern.compile("^(\\d{1,3})(?:-(\\d+))?\\s+(남|여)자(\\S+?)\\([A-Za-z][^)]*\\)\\s+(.+)$");
+        // 헤더 예시:
+        //   "4-7 남자중학부(Men.Middle School) 500m+D"     (영문 괄호만)
+        //   "44-4 남자초등부(5,6학년) DTT200m"              (학년 괄호만, 영문 없음)
+        //   "44-4 남자초등부(5,6학년)(Men.Elementary School 5-6) DTT200m"  (학년+영문)
+        //   "40 남자중학부 500m+D"                         (괄호 없음)
+        //
+        // 그룹:
+        //   4 = division (학년 괄호 포함): "중학부", "초등부(5,6학년)"
+        //   5 = event name
+        // 영문 번역 괄호는 소비만 하고 버린다.
+        Pattern fullHeader = Pattern.compile(
+                "^(\\d{1,3})(?:-(\\d+))?\\s+" +
+                "(남|여)자" +
+                "(\\S+?(?:\\(\\d[^)]*\\))?)" +          // division + optional 학년 괄호 (숫자로 시작)
+                "(?:\\s*\\([A-Za-z][^)]*\\))?" +        // optional 영문 번역 괄호 (영문으로 시작)
+                "\\s+(.+)$");
         for (int i = 0; i < lines.length; i++) {
             String trimmed = lines[i].trim();
             Matcher headerMatch = Pattern.compile("^(\\d{1,3})(?:-(\\d+))?\\s+(여|남).+").matcher(trimmed);

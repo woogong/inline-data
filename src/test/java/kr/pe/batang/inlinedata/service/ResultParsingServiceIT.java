@@ -346,6 +346,28 @@ class ResultParsingServiceIT {
     }
 
     @Test
+    @DisplayName("학년 괄호 헤더 '남자초등부(5,6학년) DTT200m' 도 파싱된다 (영문 번역 괄호 없음)")
+    void gradeSuffixHeaderWithoutEnglishParens() throws IOException {
+        // given: 해당 Event가 존재하는 상태
+        eventRepository.save(Event.builder()
+                .competition(competition).divisionName("남초부(5,6학년)").gender("M")
+                .eventName("DTT200m").teamEvent(false).build());
+        given(pdfTextExtractor.extractText(any())).willReturn(readFixture("individual_time_race_grade.layout.txt"));
+        given(pdfTextExtractor.extractTextRaw(any())).willReturn(readFixture("individual_time_race_grade.raw.txt"));
+
+        // when
+        ResultParsingService.ImportResult result = resultParsingService.parseResultPdf(
+                dummyPath("44-4_남자초등부(5,6학년)_예선4조_DTT200m.pdf"), competition.getId(), ResultSource.UPLOAD);
+
+        // then: 헤더 파싱 성공으로 EventRound가 자동 생성되고 결과가 저장됨
+        assertThat(result.results()).isEqualTo(3);
+        List<EventRound> rounds = eventRoundRepository.findByEvent_CompetitionIdOrderByEventNumberAsc(competition.getId());
+        assertThat(rounds).hasSize(1);
+        assertThat(rounds.get(0).getRound()).isEqualTo("예선");
+        assertThat(rounds.get(0).getEventNumber()).isEqualTo(44);
+    }
+
+    @Test
     @DisplayName("AUTO는 UPLOAD로 기록된 행의 bib도 변경하지 못한다")
     void autoCannotChangeUploadBib() throws IOException {
         // given: UPLOAD로 첫 임포트 (길동이=31)
