@@ -14,6 +14,12 @@ public interface EventResultRepository extends JpaRepository<EventResult, Long> 
 
     void deleteByHeatEntryIdIn(List<Long> heatEntryIds);
 
+    /** 대회 단위 cascade 삭제용: 해당 competition에 속한 모든 EventResult 삭제. */
+    @org.springframework.data.jpa.repository.Modifying
+    @Query("DELETE FROM EventResult er WHERE er.heatEntry.id IN (" +
+           "SELECT he.id FROM HeatEntry he WHERE he.entry.competition.id = :compId)")
+    void deleteByCompetitionId(@Param("compId") Long competitionId);
+
     @Query("SELECT COUNT(er) FROM EventResult er WHERE er.heatEntry.heat.id IN :heatIds")
     long countByHeatIds(@Param("heatIds") List<Long> heatIds);
 

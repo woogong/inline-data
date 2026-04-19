@@ -14,8 +14,6 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
-import kr.pe.batang.inlinedata.repository.EventRoundRepository;
-
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -29,7 +27,6 @@ public class EntryService {
 
     private final CompetitionEntryRepository competitionEntryRepository;
     private final EventHeatRepository eventHeatRepository;
-    private final EventRoundRepository eventRoundRepository;
     private final HeatEntryRepository heatEntryRepository;
     private final EventResultRepository eventResultRepository;
 
@@ -96,30 +93,23 @@ public class EntryService {
         if (query == null || query.isBlank()) return List.of();
         String q = query.trim();
 
-        // 같은 종목의 모든 라운드 → 모든 조 → 모든 엔트리
-        List<EventRound> rounds = eventRoundRepository.findByEventIdOrderByEventNumberAsc(eventId);
-        List<Long> heatIds = new ArrayList<>();
-        for (EventRound r : rounds) {
-            for (EventHeat h : eventHeatRepository.findByEventRoundIdOrderByHeatNumberAsc(r.getId())) {
-                heatIds.add(h.getId());
-            }
-        }
-        if (heatIds.isEmpty()) return List.of();
+        // 해당 이벤트의 모든 HeatEntry를 CompetitionEntry와 함께 단일 쿼리로 로드 (기존 N+1 제거)
+        List<HeatEntry> all = heatEntryRepository.findByEventIdWithEntry(eventId);
+        if (all.isEmpty()) return List.of();
 
-        // 중복 제거를 위해 athleteName 기준으로 그룹화
+        // 중복 제거를 위해 athleteName+teamName 기준으로 그룹화
         Map<String, Map<String, Object>> seen = new LinkedHashMap<>();
-        for (Long heatId : heatIds) {
-            for (HeatEntry he : heatEntryRepository.findByHeatIdOrderByBibNumberAsc(heatId)) {
-                CompetitionEntry ce = he.getEntry();
-                if (ce.getAthleteName().contains(q) && !seen.containsKey(ce.getAthleteName() + "|" + ce.getTeamName())) {
-                    Map<String, Object> item = new LinkedHashMap<>();
-                    item.put("bibNumber", he.getBibNumber());
-                    item.put("name", ce.getAthleteName());
-                    item.put("region", ce.getRegion());
-                    item.put("teamName", ce.getTeamName());
-                    seen.put(ce.getAthleteName() + "|" + ce.getTeamName(), item);
-                }
-            }
+        for (HeatEntry he : all) {
+            CompetitionEntry ce = he.getEntry();
+            if (ce.getAthleteName() == null || !ce.getAthleteName().contains(q)) continue;
+            String key = ce.getAthleteName() + "|" + ce.getTeamName();
+            if (seen.containsKey(key)) continue;
+            Map<String, Object> item = new LinkedHashMap<>();
+            item.put("bibNumber", he.getBibNumber());
+            item.put("name", ce.getAthleteName());
+            item.put("region", ce.getRegion());
+            item.put("teamName", ce.getTeamName());
+            seen.put(key, item);
         }
         return new ArrayList<>(seen.values());
     }

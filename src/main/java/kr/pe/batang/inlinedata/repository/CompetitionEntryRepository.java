@@ -2,6 +2,7 @@ package kr.pe.batang.inlinedata.repository;
 
 import kr.pe.batang.inlinedata.entity.CompetitionEntry;
 import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.jpa.repository.Modifying;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 
@@ -11,6 +12,10 @@ import java.util.Optional;
 public interface CompetitionEntryRepository extends JpaRepository<CompetitionEntry, Long> {
 
     List<CompetitionEntry> findByCompetitionId(Long competitionId);
+
+    @Modifying
+    @Query("DELETE FROM CompetitionEntry ce WHERE ce.competition.id = :compId")
+    void deleteByCompetitionId(@Param("compId") Long competitionId);
 
     @Query("SELECT ce FROM CompetitionEntry ce " +
            "LEFT JOIN FETCH ce.athlete " +

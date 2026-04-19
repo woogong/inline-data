@@ -2,6 +2,7 @@ package kr.pe.batang.inlinedata.repository;
 
 import kr.pe.batang.inlinedata.entity.Event;
 import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.jpa.repository.Modifying;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 
@@ -18,4 +19,8 @@ public interface EventRepository extends JpaRepository<Event, Long> {
 
     Optional<Event> findByCompetitionIdAndDivisionNameAndGenderAndEventName(
             Long competitionId, String divisionName, String gender, String eventName);
+
+    @Modifying
+    @Query("DELETE FROM Event e WHERE e.competition.id = :compId")
+    void deleteByCompetitionId(@Param("compId") Long competitionId);
 }

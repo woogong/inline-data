@@ -2,11 +2,6 @@ package kr.pe.batang.inlinedata.service;
 
 import kr.pe.batang.inlinedata.controller.dto.CompetitionFormDto;
 import kr.pe.batang.inlinedata.entity.Competition;
-import kr.pe.batang.inlinedata.entity.CompetitionEntry;
-import kr.pe.batang.inlinedata.entity.Event;
-import kr.pe.batang.inlinedata.entity.EventHeat;
-import kr.pe.batang.inlinedata.entity.EventRound;
-import kr.pe.batang.inlinedata.entity.HeatEntry;
 import kr.pe.batang.inlinedata.repository.CompetitionEntryRepository;
 import kr.pe.batang.inlinedata.repository.CompetitionRepository;
 import kr.pe.batang.inlinedata.repository.EventHeatRepository;
@@ -121,41 +116,23 @@ public class CompetitionService {
         }
     }
 
+    /**
+     * 대회 및 연관 데이터 전체 삭제.
+     * 역방향 FK 순서로 bulk delete — N+1 쿼리 제거, O(1) round trips.
+     */
     @Transactional
     public void delete(Long id) {
         Competition competition = findById(id);
-        List<Event> events = eventRepository.findByCompetitionIdOrderByFirstEventNumber(id);
-        for (Event event : events) {
-            deleteEventCascade(event);
-        }
-        List<CompetitionEntry> entries = competitionEntryRepository.findByCompetitionId(id);
-        for (CompetitionEntry ce : entries) {
-            heatEntryRepository.findByEntryId(ce.getId()).forEach(he -> {
-                eventResultRepository.findByHeatEntryId(he.getId()).ifPresent(eventResultRepository::delete);
-            });
-            heatEntryRepository.deleteAll(heatEntryRepository.findByEntryId(ce.getId()));
-        }
-        competitionEntryRepository.deleteAll(entries);
+        // 역방향 순서: EventResult → HeatEntry → EventHeat → EventRound → Event → CompetitionEntry → Competition
+        eventResultRepository.deleteByCompetitionId(id);
+        heatEntryRepository.deleteByCompetitionId(id);
+        eventHeatRepository.deleteByCompetitionId(id);
+        eventRoundRepository.deleteByCompetitionId(id);
+        eventRepository.deleteByCompetitionId(id);
+        competitionEntryRepository.deleteByCompetitionId(id);
         if (competition.getImagePath() != null) {
             deleteImageFile(competition.getImagePath());
         }
         competitionRepository.delete(competition);
-    }
-
-    private void deleteEventCascade(Event event) {
-        List<EventRound> rounds = eventRoundRepository.findByEventIdOrderByEventNumberAsc(event.getId());
-        for (EventRound round : rounds) {
-            List<EventHeat> heats = eventHeatRepository.findByEventRoundIdOrderByHeatNumberAsc(round.getId());
-            for (EventHeat heat : heats) {
-                List<HeatEntry> heatEntries = heatEntryRepository.findByHeatIdOrderByBibNumberAsc(heat.getId());
-                for (HeatEntry he : heatEntries) {
-                    eventResultRepository.findByHeatEntryId(he.getId()).ifPresent(eventResultRepository::delete);
-                }
-                heatEntryRepository.deleteAll(heatEntries);
-            }
-            eventHeatRepository.deleteAll(heats);
-        }
-        eventRoundRepository.deleteAll(rounds);
-        eventRepository.delete(event);
     }
 }

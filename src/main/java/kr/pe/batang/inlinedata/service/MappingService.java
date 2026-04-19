@@ -13,6 +13,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
@@ -52,11 +53,17 @@ public class MappingService {
 
     /**
      * 엔트리 ID → 부별 계열을 일괄 조회하여 캐시 맵을 만든다.
+     * 단일 aggregated 쿼리로 N+1 제거.
      */
     private Map<Long, Set<String>> buildDivisionCache(List<CompetitionEntry> entries) {
+        if (entries.isEmpty()) return new HashMap<>();
+        List<Long> ids = entries.stream().map(CompetitionEntry::getId).toList();
         Map<Long, Set<String>> cache = new HashMap<>();
-        for (CompetitionEntry ce : entries) {
-            cache.put(ce.getId(), getDivisionCategories(ce.getId()));
+        for (Long id : ids) cache.put(id, new HashSet<>());
+        for (Object[] row : heatEntryRepository.findDivisionNamesByEntryIds(ids)) {
+            Long entryId = (Long) row[0];
+            String divisionName = (String) row[1];
+            cache.computeIfAbsent(entryId, k -> new HashSet<>()).add(normalizeDivision(divisionName));
         }
         return cache;
     }
@@ -66,9 +73,13 @@ public class MappingService {
                              String divisions, String events) {}
 
     private HistoryDto toHistoryDto(CompetitionEntry ce) {
+        return toHistoryDto(ce, heatEntryRepository.findByEntryId(ce.getId()));
+    }
+
+    /** heatEntries를 외부에서 미리 조회해 넘기는 bulk 친화 버전. */
+    private HistoryDto toHistoryDto(CompetitionEntry ce, List<HeatEntry> heatEntries) {
         String compName = ce.getCompetition().getShortName() != null
                 ? ce.getCompetition().getShortName() : ce.getCompetition().getName();
-        List<HeatEntry> heatEntries = heatEntryRepository.findByEntryId(ce.getId());
         String divisions = heatEntries.stream()
                 .map(he -> he.getHeat().getEventRound().getEvent().getDivisionName())
                 .distinct().sorted().collect(Collectors.joining(", "));
@@ -79,6 +90,17 @@ public class MappingService {
         Integer year = ce.getCompetition().getStartDate() != null ? ce.getCompetition().getStartDate().getYear() : null;
         return new HistoryDto(compName, edition, year, ce.getTeamName(), ce.getRegion(), ce.getGrade(),
                 divisions.isEmpty() ? null : divisions, events.isEmpty() ? null : events);
+    }
+
+    /** CE 목록 전체에 대해 HeatEntry를 한번에 fetch join 후 HistoryDto로 변환. */
+    private List<HistoryDto> toHistoryDtosBulk(List<CompetitionEntry> entries) {
+        if (entries.isEmpty()) return List.of();
+        List<Long> ids = entries.stream().map(CompetitionEntry::getId).toList();
+        Map<Long, List<HeatEntry>> byEntry = heatEntryRepository.findByEntryIdsWithEvent(ids)
+                .stream().collect(Collectors.groupingBy(he -> he.getEntry().getId()));
+        return entries.stream()
+                .map(ce -> toHistoryDto(ce, byEntry.getOrDefault(ce.getId(), List.of())))
+                .toList();
     }
 
     public record CandidateDto(
@@ -99,9 +121,7 @@ public class MappingService {
         return athletes.stream()
                 .map(athlete -> {
                     List<CompetitionEntry> historyEntries = entryRepository.findByAthleteId(athlete.getId());
-                    List<HistoryDto> history = historyEntries.stream()
-                            .map(this::toHistoryDto)
-                            .toList();
+                    List<HistoryDto> history = toHistoryDtosBulk(historyEntries);
                     return new CandidateDto(
                             athlete.getId(),
                             athlete.getName(),
@@ -306,9 +326,7 @@ public class MappingService {
                     List<DuplicateCandidateDto> candidates = athletes.stream()
                             .map(a -> {
                                 List<CompetitionEntry> entries = entryRepository.findByAthleteId(a.getId());
-                                List<HistoryDto> history = entries.stream()
-                                        .map(this::toHistoryDto)
-                                        .toList();
+                                List<HistoryDto> history = toHistoryDtosBulk(entries);
                                 return new DuplicateCandidateDto(a.getId(), a.getName(), a.getGender(), a.getNotes(), history);
                             })
                             .toList();

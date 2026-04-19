@@ -127,11 +127,16 @@ class CompetitionServiceTest {
     void delete() {
         Competition competition = createCompetition();
         given(competitionRepository.findById(1L)).willReturn(Optional.of(competition));
-        given(eventRepository.findByCompetitionIdOrderByFirstEventNumber(1L)).willReturn(List.of());
-        given(competitionEntryRepository.findByCompetitionId(1L)).willReturn(List.of());
 
         competitionService.delete(1L);
 
+        // 역방향 순서대로 bulk delete 후 competition 삭제
+        then(eventResultRepository).should().deleteByCompetitionId(1L);
+        then(heatEntryRepository).should().deleteByCompetitionId(1L);
+        then(eventHeatRepository).should().deleteByCompetitionId(1L);
+        then(eventRoundRepository).should().deleteByCompetitionId(1L);
+        then(eventRepository).should().deleteByCompetitionId(1L);
+        then(competitionEntryRepository).should().deleteByCompetitionId(1L);
         then(competitionRepository).should().delete(competition);
     }
 }
