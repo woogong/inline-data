@@ -176,14 +176,51 @@ public class ResultParsingService {
         Set<Long> matchedHeatEntryIds = new HashSet<>();
 
         for (ParsedResult pr : results) {
-            // 이름 매칭만 사용: 같은 bib에 다른 선수가 배치되어도 "새 선수"로 취급
+            // === 1) 기존 HeatEntry 찾기 (이름 또는 CE id) ===
             HeatEntry heatEntry = entryByName.get(pr.athleteName());
+            CompetitionEntry compEntry = null;
+            if (heatEntry == null) {
+                compEntry = findOrCreateCompetitionEntry(
+                        compId, pr.athleteName(), gender, pr.region(), pr.teamName());
+                // DB는 악센트/대소문자 무시 매칭이 가능하므로(MySQL utf8mb4_unicode_ci),
+                // findOrCreate가 이미 이 heat에 등록된 CompetitionEntry를 돌려줄 수 있다.
+                // 이 경우 HeatEntry (heat_id, entry_id) UK 충돌을 피하기 위해 기존 HeatEntry 재사용.
+                if (compEntry.getId() != null) {
+                    heatEntry = entryByCeId.get(compEntry.getId());
+                }
+            }
 
+            // === 2) 상위 출처 보호: AUTO가 UPLOAD/MANUAL을 덮어쓰려 하면 어떤 mutation도 하지 않고 skip ===
+            //     (bib update / evict / result update 등 모든 파생 동작을 일괄 차단)
             if (heatEntry != null) {
-                // 재사용. bib이 바뀌었으면 업데이트 (heat_id,bib_number UK 충돌 방지)
-                if (heatEntry.getBibNumber() == null || heatEntry.getBibNumber().intValue() != pr.bibNumber()) {
-                    evictBibConflict(pr.bibNumber(), heatEntry,
-                            entryByBib, entryByName, entryByCeId, matchedHeatEntryIds);
+                Optional<EventResult> existingEr = eventResultRepository.findByHeatEntryId(heatEntry.getId());
+                if (existingEr.isPresent() && !source.canOverwrite(existingEr.get().getSource())) {
+                    log.info("상위 출처 결과 보호로 스킵: name={} bib={} existing-source={} new-source={}",
+                            pr.athleteName(), pr.bibNumber(), existingEr.get().getSource(), source);
+                    matchedHeatEntryIds.add(heatEntry.getId());  // cleanup에서 삭제되지 않도록 matched 처리
+                    continue;
+                }
+            }
+
+            // === 3) bib 충돌 해결. 충돌 소유자가 상위 출처 결과를 가지면 이 행 전체 스킵 ===
+            boolean needsBibChange = (heatEntry == null)
+                    || heatEntry.getBibNumber() == null
+                    || heatEntry.getBibNumber().intValue() != pr.bibNumber();
+            if (needsBibChange) {
+                HeatEntry bibOwner = entryByBib.get(pr.bibNumber());
+                if (bibOwner != null && bibOwner != heatEntry && !canEvictBibOwner(bibOwner, source)) {
+                    log.info("bib {} 소유자가 상위 출처 결과라 스킵: name={} new-source={}",
+                            pr.bibNumber(), pr.athleteName(), source);
+                    if (heatEntry != null) matchedHeatEntryIds.add(heatEntry.getId());
+                    continue;
+                }
+                evictBibConflict(pr.bibNumber(), heatEntry,
+                        entryByBib, entryByName, entryByCeId, matchedHeatEntryIds);
+            }
+
+            // === 4) HeatEntry 업데이트 또는 생성 ===
+            if (heatEntry != null) {
+                if (needsBibChange) {
                     entryByBib.remove(heatEntry.getBibNumber());
                     heatEntry.updateBib(pr.bibNumber());
                     // Hibernate는 flush 시 INSERT → UPDATE → DELETE 순이라 bib swap 시나리오에서
@@ -192,52 +229,25 @@ public class ResultParsingService {
                     entryByBib.put(pr.bibNumber(), heatEntry);
                 }
             } else {
-                // 이름 매칭 실패 → CompetitionEntry 조회/생성
-                CompetitionEntry compEntry = findOrCreateCompetitionEntry(
-                        compId, pr.athleteName(), gender, pr.region(), pr.teamName());
-                // DB는 악센트/대소문자 무시 매칭이 가능하므로(MySQL utf8mb4_unicode_ci),
-                // findOrCreate가 이미 이 heat에 등록된 CompetitionEntry를 돌려줄 수 있다.
-                // 이 경우 HeatEntry (heat_id, entry_id) UK 충돌을 피하기 위해 기존 HeatEntry 재사용.
-                HeatEntry existing = compEntry.getId() != null ? entryByCeId.get(compEntry.getId()) : null;
-                if (existing != null) {
-                    heatEntry = existing;
-                    if (heatEntry.getBibNumber() == null || heatEntry.getBibNumber().intValue() != pr.bibNumber()) {
-                        evictBibConflict(pr.bibNumber(), heatEntry,
-                                entryByBib, entryByName, entryByCeId, matchedHeatEntryIds);
-                        entryByBib.remove(heatEntry.getBibNumber());
-                        heatEntry.updateBib(pr.bibNumber());
-                        heatEntryRepository.flush();
-                        entryByBib.put(pr.bibNumber(), heatEntry);
-                    }
-                } else {
-                    evictBibConflict(pr.bibNumber(), null,
-                            entryByBib, entryByName, entryByCeId, matchedHeatEntryIds);
-                    heatEntry = heatEntryRepository.save(HeatEntry.builder()
-                            .heat(targetHeat).entry(compEntry).bibNumber(pr.bibNumber()).build());
-                    entryByBib.put(pr.bibNumber(), heatEntry);
-                    if (compEntry.getId() != null) entryByCeId.put(compEntry.getId(), heatEntry);
-                    newEntryCount++;
-                }
-                entryByName.put(pr.athleteName(), heatEntry);
+                heatEntry = heatEntryRepository.save(HeatEntry.builder()
+                        .heat(targetHeat).entry(compEntry).bibNumber(pr.bibNumber()).build());
+                entryByBib.put(pr.bibNumber(), heatEntry);
+                if (compEntry.getId() != null) entryByCeId.put(compEntry.getId(), heatEntry);
+                newEntryCount++;
             }
-
+            entryByName.put(pr.athleteName(), heatEntry);
             matchedHeatEntryIds.add(heatEntry.getId());
 
-            // 재임포트 시 기존 CompetitionEntry의 소속/시도도 최신 파싱 결과로 업데이트 (아직 매핑되지 않은 경우에만)
-            CompetitionEntry compEntry = heatEntry.getEntry();
-            if (compEntry != null && !compEntry.isMapped()) {
-                compEntry.updateFromParsed(pr.region(), pr.teamName());
+            // === 5) 재임포트 시 기존 CompetitionEntry의 소속/시도도 최신 파싱 결과로 업데이트 (미매핑인 경우만) ===
+            CompetitionEntry ce = heatEntry.getEntry();
+            if (ce != null && !ce.isMapped()) {
+                ce.updateFromParsed(pr.region(), pr.teamName());
             }
 
-            // 결과 저장/갱신 (source 우선순위 체크)
+            // === 6) EventResult 저장/갱신 (source 체크는 2단계에서 이미 수행됨) ===
             Optional<EventResult> existing = eventResultRepository.findByHeatEntryId(heatEntry.getId());
             if (existing.isPresent()) {
                 EventResult er = existing.get();
-                if (!source.canOverwrite(er.getSource())) {
-                    log.debug("상위 출처가 기록한 결과라 건너뜀: heatEntry={} existing={} new={}",
-                            heatEntry.getId(), er.getSource(), source);
-                    continue;
-                }
                 er.updateResult(pr.ranking(), pr.record(), pr.newRecord(), pr.qualification(), pr.note(), source);
                 writeHistory(er, source);
             } else {
@@ -321,11 +331,22 @@ public class ResultParsingService {
     }
 
     /**
+     * bib 소유자를 이번 source가 evict할 수 있는지 검사. 소유자의 EventResult가 상위 출처(MANUAL/UPLOAD)인
+     * 상태에서 현재 source가 AUTO라면 evict 불가 → 호출부에서 전체 row를 스킵해야 한다.
+     */
+    private boolean canEvictBibOwner(HeatEntry bibOwner, ResultSource source) {
+        Optional<EventResult> er = eventResultRepository.findByHeatEntryId(bibOwner.getId());
+        return er.isEmpty() || source.canOverwrite(er.get().getSource());
+    }
+
+    /**
      * 같은 heat 안에서 bib가 다른 HeatEntry에 선점돼 있으면 그 HeatEntry와 결과를 삭제해 (heat_id, bib_number) UK 충돌을 막는다.
      * owner는 이번 결과를 담을 HeatEntry(없으면 null): 자기 자신은 건드리지 않는다.
      *
      * 삭제된 엔트리는 이번 파싱 결과에서 다른 선수로 교체될 대상이다. CompetitionEntry는 보존되고
      * 이후 이름 매칭 실패로 같은 CE를 재사용하는 로직(entryByCeId)이 HeatEntry를 재생성한다.
+     *
+     * 상위 출처 보호는 호출 전에 {@link #canEvictBibOwner}로 확인해야 한다.
      */
     private void evictBibConflict(Integer bib, HeatEntry owner,
                                   Map<Integer, HeatEntry> entryByBib,

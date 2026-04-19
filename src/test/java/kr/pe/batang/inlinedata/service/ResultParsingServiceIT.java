@@ -346,6 +346,81 @@ class ResultParsingServiceIT {
     }
 
     @Test
+    @DisplayName("AUTO는 UPLOAD로 기록된 행의 bib도 변경하지 못한다")
+    void autoCannotChangeUploadBib() throws IOException {
+        // given: UPLOAD로 첫 임포트 (길동이=31)
+        eventRepository.save(Event.builder()
+                .competition(competition).divisionName("남중부").gender("M")
+                .eventName("500m+D").teamEvent(false).build());
+        mockPdfExtraction("individual_time_race");
+        resultParsingService.parseResultPdf(dummyPath("individual_time_race.pdf"), competition.getId(), ResultSource.UPLOAD);
+
+        // when: AUTO가 길동이의 bib을 31 → 99로 바꾸려 함
+        String autoRaw = """
+                2026 테스트 오픈 인라인 대회
+                테스트시
+                4-7 남자중학부(Men.Middle School) 500m+D
+                예선7조
+                순위
+                등번호
+                이름
+                소속
+                기록
+                서울테스트클럽 1 99 길동이 Q 46.993
+                세종테스트클럽 2 45 채훈이 51.671
+                부산테스트클럽 3 12 민수이 52.001
+                """;
+        given(pdfTextExtractor.extractText(any())).willReturn(readFixture("individual_time_race.layout.txt"));
+        given(pdfTextExtractor.extractTextRaw(any())).willReturn(autoRaw);
+        resultParsingService.parseResultPdf(dummyPath("individual_time_race.pdf"), competition.getId(), ResultSource.AUTO);
+
+        // then: 길동이 bib은 그대로 31 유지
+        HeatEntry gildong = heatEntryRepository.findAll().stream()
+                .filter(e -> "길동이".equals(e.getEntry().getAthleteName())).findFirst().orElseThrow();
+        assertThat(gildong.getBibNumber()).isEqualTo(31);
+    }
+
+    @Test
+    @DisplayName("AUTO는 bib 충돌 해결을 위해 UPLOAD 소유자를 지우지 못한다")
+    void autoCannotEvictUploadBibOwner() throws IOException {
+        // given: UPLOAD로 첫 임포트 — 길동이=31, 채훈이=45
+        eventRepository.save(Event.builder()
+                .competition(competition).divisionName("남중부").gender("M")
+                .eventName("500m+D").teamEvent(false).build());
+        mockPdfExtraction("individual_time_race");
+        resultParsingService.parseResultPdf(dummyPath("individual_time_race.pdf"), competition.getId(), ResultSource.UPLOAD);
+
+        // when: AUTO가 새 선수 "신입이"를 bib=45로 넣으려 함 (채훈이가 45 점유 중, UPLOAD 소스)
+        String autoRaw = """
+                2026 테스트 오픈 인라인 대회
+                테스트시
+                4-7 남자중학부(Men.Middle School) 500m+D
+                예선7조
+                순위
+                등번호
+                이름
+                소속
+                기록
+                서울테스트클럽 1 45 신입이 45.000
+                """;
+        given(pdfTextExtractor.extractText(any())).willReturn(readFixture("individual_time_race.layout.txt"));
+        given(pdfTextExtractor.extractTextRaw(any())).willReturn(autoRaw);
+        resultParsingService.parseResultPdf(dummyPath("individual_time_race.pdf"), competition.getId(), ResultSource.AUTO);
+
+        // then: 채훈이의 bib=45와 UPLOAD 결과는 유지됨. 신입이는 등록되지 않음.
+        HeatEntry chaehun = heatEntryRepository.findAll().stream()
+                .filter(e -> "채훈이".equals(e.getEntry().getAthleteName())).findFirst().orElseThrow();
+        assertThat(chaehun.getBibNumber()).isEqualTo(45);
+        EventResult chaehunResult = eventResultRepository.findByHeatEntryId(chaehun.getId()).orElseThrow();
+        assertThat(chaehunResult.getRecord()).isEqualTo("51.671");
+        assertThat(chaehunResult.getSource()).isEqualTo(ResultSource.UPLOAD);
+
+        boolean newcomerExists = heatEntryRepository.findAll().stream()
+                .anyMatch(e -> "신입이".equals(e.getEntry().getAthleteName()));
+        assertThat(newcomerExists).isFalse();
+    }
+
+    @Test
     @DisplayName("UPLOAD는 UPLOAD를 덮어쓸 수 있다 (동순위)")
     void uploadCanOverwriteUpload() throws IOException {
         eventRepository.save(Event.builder()
