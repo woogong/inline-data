@@ -25,9 +25,11 @@ import java.security.NoSuchAlgorithmException;
 import java.time.Instant;
 import java.time.LocalDateTime;
 import java.time.ZoneId;
+import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.HexFormat;
 import java.util.List;
+import java.util.Set;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.stream.Stream;
 
@@ -144,12 +146,29 @@ public class AutoResultImportService {
 
         try {
             List<Path> candidates = findCandidateFiles();
-            log.info("자동 결과 스캔 시작: competitionId={} watchDir={} 후보 {}건",
-                    competitionId, watchDir, candidates.size());
 
+            // 이미 처리된 파일은 hash 계산/TX 진입 전에 (fileName, fileSize) 매칭으로 제외.
+            // OneDrive 등으로 move가 차단되어 원본이 watch-dir에 남아있을 때 매 스캔마다
+            // 550개를 반복 처리하는 것처럼 보이는 현상을 막는다.
+            Set<String> processedKeys = Set.copyOf(
+                    resultImportFileRepository.findProcessedFileKeys(competitionId));
+            List<Path> newCandidates = new ArrayList<>();
+            int preSkipped = 0;
             for (Path path : candidates) {
+                if (isAlreadyProcessed(path, processedKeys)) {
+                    preSkipped++;
+                    // 이전 스캔에서 이동 실패한 파일은 archive로 재이동 시도.
+                    moveIfConfigured(path, resolveArchivePath(path.getFileName().toString()));
+                } else {
+                    newCandidates.add(path);
+                }
+            }
+            log.info("자동 결과 스캔 시작: competitionId={} watchDir={} 후보 {}건 (이미 처리 {}건 스킵, 신규 {}건 처리)",
+                    competitionId, watchDir, candidates.size(), preSkipped, newCandidates.size());
+
+            for (Path path : newCandidates) {
                 scanned++;
-                log.info("파일 처리 시작 [{}/{}]: {}", scanned, candidates.size(), path.getFileName());
+                log.info("파일 처리 시작 [{}/{}]: {}", scanned, newCandidates.size(), path.getFileName());
                 // self 프록시 경유: importFile의 @Transactional이 파일마다 독립 TX를 열어준다.
                 ProcessOutcome outcome = self.importFile(path, competitionId);
                 switch (outcome.status()) {
@@ -163,11 +182,24 @@ public class AutoResultImportService {
                 }
             }
             long elapsed = System.currentTimeMillis() - startedAt;
-            log.info("자동 결과 스캔 종료: {}ms 동안 스캔 {}건 / 성공 {} / 스킵 {} / 실패 {} / 결과 {} / 새 엔트리 {}",
-                    elapsed, scanned, imported, skipped, failed, results, newEntries);
+            log.info("자동 결과 스캔 종료: {}ms 동안 신규 스캔 {}건 / 성공 {} / 스킵 {} / 실패 {} / 결과 {} / 새 엔트리 {} (pre-스킵 {}건)",
+                    elapsed, scanned, imported, skipped, failed, results, newEntries, preSkipped);
             return new ScanSummary(scanned, imported, skipped, failed, results, newEntries);
         } finally {
             running.set(false);
+        }
+    }
+
+    /**
+     * hash 계산 없이 (fileName, fileSize) 매칭으로 이미 처리된 파일인지 확인.
+     * 파일명과 크기가 동일한 PENDING 아닌 기록이 있으면 true.
+     */
+    private boolean isAlreadyProcessed(Path path, Set<String> processedKeys) {
+        try {
+            String key = path.getFileName().toString() + "|" + Files.size(path);
+            return processedKeys.contains(key);
+        } catch (IOException e) {
+            return false;  // I/O 오류 시 fallback — importFile의 hash 기반 dedupe가 재처리 방지
         }
     }
 
