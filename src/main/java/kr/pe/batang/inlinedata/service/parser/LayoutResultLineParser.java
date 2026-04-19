@@ -152,28 +152,57 @@ public final class LayoutResultLineParser {
             if (trimmed.isEmpty()) continue;
             if (isFooter(trimmed)) continue;
 
+            // 일부 PDF는 진출여부 Q를 행 맨 앞에 장식 표시로 찍는다 ("Q     1   안동시청 ...").
+            // 뒤에 오는 진출여부 컬럼의 Q는 그대로 두고, 앞쪽의 중복 Q만 제거해 regex가 먹히게 한다.
+            Matcher leadingMark = LEADING_QUAL_MARK.matcher(trimmed);
+            if (leadingMark.matches()) {
+                trimmed = leadingMark.group(1);
+            }
+
             Matcher m = RESULT_ROW.matcher(trimmed);
             if (!m.matches()) continue;
 
             String rankStr = m.group(1);
-            int lane = Integer.parseInt(m.group(2));
+            int laneOrRank = Integer.parseInt(m.group(2));
             String rest = m.group(3).trim();
 
             Integer ranking = null;
+            int lane;
             if (rankStr != null) {
                 try { ranking = Integer.parseInt(rankStr); } catch (NumberFormatException ignored) {}
+                lane = laneOrRank;
+            } else {
+                // "순위" 컬럼만 있고 별도 레인 컬럼이 없는 포맷 (대학일반부 계주 등).
+                // 단일 숫자를 순위로 사용 (lane에도 같은 값을 넣어 기존 ParsedResult 시그니처 유지).
+                ranking = laneOrRank;
+                lane = laneOrRank;
             }
 
             String[] parts = rest.split("\\s{2,}");
             String teamEntryName = parts.length >= 1 ? parts[0].trim() : null;
             String region = parts.length >= 2 ? parts[1].trim() : null;
 
-            // 팀명과 시도가 공백 1개로 붙어있는 경우 분리 (시도는 2~3글자 한글)
+            // parts[1]이 시도가 아니라 기록(시간/점수)이라면 region을 null로 되돌려 아래 분리 로직을 태운다.
+            if (region != null && (TIME_RECORD.matcher(region).matches() || region.matches("^\\d+$"))) {
+                region = null;
+            }
+
+            // 팀명과 시도가 붙어있는 경우 분리. 두 단계 시도:
+            //   (a) 공백 1개로 붙음: "...연맹 전북"
+            //   (b) 아예 공백 없이 붙음: "...연맹전북" → 알려진 한국 시도 접미사로 잘라냄
             if (teamEntryName != null && region == null) {
                 Matcher regionSuffix = Pattern.compile("^(.+?)\\s+([가-힣]{2,3})$").matcher(teamEntryName);
-                if (regionSuffix.matches()) {
+                if (regionSuffix.matches() && RegionNormalizer.isValidKoreanRegion(regionSuffix.group(2))) {
                     teamEntryName = regionSuffix.group(1).trim();
                     region = regionSuffix.group(2);
+                } else {
+                    for (String kor : RegionNormalizer.KOREAN_REGIONS) {
+                        if (teamEntryName.endsWith(kor) && teamEntryName.length() > kor.length()) {
+                            teamEntryName = teamEntryName.substring(0, teamEntryName.length() - kor.length()).trim();
+                            region = kor;
+                            break;
+                        }
+                    }
                 }
             }
 
@@ -200,6 +229,8 @@ public final class LayoutResultLineParser {
         }
         return results;
     }
+
+    private static final Pattern LEADING_QUAL_MARK = Pattern.compile("^Q\\s+(.+)$");
 
     // ============================================================
     // helpers

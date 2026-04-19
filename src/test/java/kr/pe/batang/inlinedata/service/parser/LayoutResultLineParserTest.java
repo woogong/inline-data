@@ -77,6 +77,58 @@ class LayoutResultLineParserTest {
             List<ParsedResult> r = LayoutResultLineParser.parseTeam(lines);
             assertThat(r).hasSize(1);
         }
+
+        @Test
+        @DisplayName("행 맨 앞에 장식 Q 마커가 있는 포맷 — 119-1 여자대학일반부 계주3,000m")
+        void leadingQMark() {
+            String[] lines = {
+                    " 순위          팀명          시도        기록      진출여부",
+                    "Q     1      안동시청              경북      4:30.555      Q",
+                    "             (34박민정,35양도이,36이유진)",
+                    "Q     2      TEAM SUGATTI PRO   TPE     4:30.633      Q",
+                    "             (14MENG-CHU LI,15YUN-CHENG LEE)",
+                    "      3      전북특별자치도롤러스포츠연맹전북                4:33.625",
+                    "             (3황서연,2이다연,1박진유)"
+            };
+            List<ParsedResult> r = LayoutResultLineParser.parseTeam(lines);
+            assertThat(r).hasSize(3);
+
+            // 1위: 안동시청 (진출여부 Q 포함)
+            assertThat(r.get(0).ranking()).isEqualTo(1);
+            assertThat(r.get(0).teamName()).isEqualTo("안동시청");
+            assertThat(r.get(0).region()).isEqualTo("경북");
+            assertThat(r.get(0).record()).isEqualTo("4:30.555");
+            assertThat(r.get(0).qualification()).isEqualTo("Q");
+
+            // 2위: 외국 팀
+            assertThat(r.get(1).ranking()).isEqualTo(2);
+            assertThat(r.get(1).teamName()).isEqualTo("TEAM SUGATTI PRO");
+            assertThat(r.get(1).region()).isEqualTo("TPE");
+            assertThat(r.get(1).record()).isEqualTo("4:30.633");
+
+            // 3위: 팀명+시도가 공백 없이 붙은 형태 → 분리됨
+            assertThat(r.get(2).ranking()).isEqualTo(3);
+            assertThat(r.get(2).teamName()).isEqualTo("전북특별자치도롤러스포츠연맹");
+            assertThat(r.get(2).region()).isEqualTo("전북");
+            assertThat(r.get(2).record()).isEqualTo("4:33.625");
+            assertThat(r.get(2).qualification()).isNull();
+        }
+
+        @Test
+        @DisplayName("순위 컬럼만 있고 레인 없는 단일숫자 포맷")
+        void singleNumberRankOnly() {
+            String[] lines = {
+                    " 순위       팀명      시도      기록",
+                    "  1   서울팀     서울    5:00.000",
+                    "  2   부산팀     부산    5:05.000"
+            };
+            List<ParsedResult> r = LayoutResultLineParser.parseTeam(lines);
+            assertThat(r).hasSize(2);
+            assertThat(r.get(0).ranking()).isEqualTo(1);
+            assertThat(r.get(0).teamName()).isEqualTo("서울팀");
+            assertThat(r.get(1).ranking()).isEqualTo(2);
+            assertThat(r.get(1).teamName()).isEqualTo("부산팀");
+        }
     }
 
     @Nested
