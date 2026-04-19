@@ -53,9 +53,15 @@ public class EventResult {
     @Column(length = 100)
     private String note;
 
-    /** 이 행을 마지막으로 기록/수정한 출처. 덮어쓰기 우선순위 판정에 사용. */
+    /**
+     * 이 행을 마지막으로 기록/수정한 출처. 덮어쓰기 우선순위 판정에 사용.
+     * columnDefinition을 명시하는 이유:
+     *  - Hibernate 7이 @Enumerated(STRING)을 MariaDB ENUM 타입으로 생성하는 것을 피해
+     *    VARCHAR로 고정 (enum 값 추가/삭제 시 ALTER TABLE 비용 감소)
+     *  - 기존 행이 있는 테이블에 NOT NULL 컬럼 추가 시 DEFAULT 값 제공
+     */
     @Enumerated(EnumType.STRING)
-    @Column(length = 10, nullable = false)
+    @Column(columnDefinition = "VARCHAR(10) NOT NULL DEFAULT 'UPLOAD'")
     private ResultSource source;
 
     @CreatedDate

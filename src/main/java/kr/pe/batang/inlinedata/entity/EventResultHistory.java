@@ -42,8 +42,9 @@ public class EventResultHistory {
     @Column(name = "heat_entry_id", nullable = false)
     private Long heatEntryId;
 
+    /** EventResult.source와 동일한 이유로 VARCHAR로 고정. */
     @Enumerated(EnumType.STRING)
-    @Column(length = 10, nullable = false)
+    @Column(columnDefinition = "VARCHAR(10) NOT NULL")
     private ResultSource source;
 
     private Integer ranking;
