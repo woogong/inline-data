@@ -34,6 +34,7 @@ import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.TimeUnit;
+import java.util.concurrent.TimeoutException;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.stream.Stream;
 
@@ -237,7 +238,14 @@ public class AutoResultImportService {
     /** Stage 1 결과. 성공이면 staged != null, error == null. 실패면 반대. */
     protected record DownloadResult(Path source, Path staged, String error) {}
 
-    /** OneDrive watch-dir의 파일들을 staging으로 병렬 복사. 각 파일 {@link #copyTimeoutSeconds}초 타임아웃. */
+    /**
+     * OneDrive watch-dir의 파일들을 staging으로 복사. parallelDownloads 크기의 배치로 묶어 실행하며
+     * 각 배치의 모든 파일이 완료(또는 타임아웃)되면 다음 배치를 시작한다.
+     *
+     * 이전 구현은 모든 파일에 대해 future를 즉시 생성하고 orTimeout을 걸어서,
+     * 실행 순서를 기다리던 파일들까지 executor 큐에 있는 동안 타이머가 흘러 전부 일괄 타임아웃되었다.
+     * 배치 방식은 각 파일의 타이머가 "자기 배치 시작 시점"에만 가동되므로 후반부 파일도 공정하게 기회를 얻는다.
+     */
     private List<DownloadResult> downloadToStaging(List<Path> sources) {
         if (sources.isEmpty()) return List.of();
         Path staging = resolveStagingDir();
@@ -251,19 +259,25 @@ public class AutoResultImportService {
         }
 
         ExecutorService exec = getDownloadExecutor();
-        List<CompletableFuture<DownloadResult>> futures = new ArrayList<>(sources.size());
-        for (Path source : sources) {
-            Path staged = staging.resolve(source.getFileName().toString());
-            CompletableFuture<DownloadResult> f = CompletableFuture
-                    .supplyAsync(() -> copyOne(source, staged), exec)
-                    // get()으로 기다리면서 타임아웃 걸어 메인 스레드가 영영 블록되지 않게 함.
-                    // supplyAsync 내부 스레드는 계속 동작할 수 있으나 staging 파일은 다음 cleanStagingOrphans에서 정리.
-                    .orTimeout(copyTimeoutSeconds, TimeUnit.SECONDS)
-                    .exceptionally(ex -> new DownloadResult(source, null,
-                            "타임아웃 또는 복사 실패: " + firstLine(ex.getMessage())));
-            futures.add(f);
+        int batchSize = Math.max(1, parallelDownloads);
+        List<DownloadResult> results = new ArrayList<>(sources.size());
+
+        for (int i = 0; i < sources.size(); i += batchSize) {
+            List<Path> batch = sources.subList(i, Math.min(i + batchSize, sources.size()));
+            List<CompletableFuture<DownloadResult>> batchFutures = new ArrayList<>(batch.size());
+            for (Path source : batch) {
+                Path staged = staging.resolve(source.getFileName().toString());
+                CompletableFuture<DownloadResult> f = CompletableFuture
+                        .supplyAsync(() -> copyOne(source, staged), exec)
+                        .orTimeout(copyTimeoutSeconds, TimeUnit.SECONDS)
+                        .exceptionally(ex -> toErrorResult(source, ex));
+                batchFutures.add(f);
+            }
+            for (CompletableFuture<DownloadResult> f : batchFutures) {
+                results.add(f.join());
+            }
         }
-        return futures.stream().map(CompletableFuture::join).toList();
+        return results;
     }
 
     private DownloadResult copyOne(Path source, Path staged) {
@@ -272,8 +286,24 @@ public class AutoResultImportService {
             return new DownloadResult(source, staged, null);
         } catch (IOException e) {
             try { Files.deleteIfExists(staged); } catch (IOException ignore) {}
-            return new DownloadResult(source, null, e.getMessage());
+            String msg = e.getMessage() != null && !e.getMessage().isBlank()
+                    ? e.getMessage() : e.getClass().getSimpleName();
+            return new DownloadResult(source, null, msg);
         }
+    }
+
+    /** orTimeout + exceptionally에서 호출. TimeoutException은 명시적 문구로, 그 외는 원인 메시지로. */
+    private DownloadResult toErrorResult(Path source, Throwable ex) {
+        Throwable cause = (ex instanceof java.util.concurrent.CompletionException && ex.getCause() != null)
+                ? ex.getCause() : ex;
+        String msg;
+        if (cause instanceof TimeoutException) {
+            msg = copyTimeoutSeconds + "초 복사 타임아웃 (OneDrive 동기화 지연)";
+        } else {
+            String m = cause.getMessage();
+            msg = (m != null && !m.isBlank()) ? m : cause.getClass().getSimpleName();
+        }
+        return new DownloadResult(source, null, msg);
     }
 
     private Path resolveStagingDir() {

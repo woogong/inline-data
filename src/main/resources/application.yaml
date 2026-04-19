@@ -21,8 +21,11 @@ spring:
 
 app:
   result-import:
-    watch-dir: ""
+    watch-dir: "/Users/batang/Library/CloudStorage/OneDrive-개인/posting"
     archive-dir: ""
     error-dir: ""
     polling-interval-ms: 10000
     stable-wait-seconds: 15
+    staging-dir: ""                 # 기본 ${java.io.tmpdir}/inline-staging
+    copy-timeout-seconds: 60        # 파일당 복사 타임아웃
+    parallel-downloads: 4           # Stage 1 병렬 스레드 수
