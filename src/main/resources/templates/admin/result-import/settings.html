@@ -28,10 +28,20 @@
         .btn-secondary:hover { background: #7f8c8d; }
         .meta { color: #555; font-size: 0.9rem; margin-top: 0.5rem; }
         .msg-success { padding: 0.6rem 1rem; background: #d4edda; color: #155724; border: 1px solid #c3e6cb; border-radius: 4px; margin-bottom: 1rem; }
+        .scan-result { padding: 0.6rem 1rem; margin-top: 0.8rem; border-radius: 4px; font-size: 0.9rem; display: none; }
+        .scan-result.show { display: block; }
+        .scan-result.ok { background: #d4edda; color: #155724; border: 1px solid #c3e6cb; }
+        .scan-result.busy { background: #fff3cd; color: #856404; border: 1px solid #ffeeba; }
+        .scan-result.err { background: #f8d7da; color: #721c24; border: 1px solid #f5c6cb; }
         table { width: 100%; border-collapse: collapse; margin: 1rem 0 0; }
-        th, td { padding: 0.6rem 0.8rem; border: 1px solid #ddd; text-align: left; }
+        th, td { padding: 0.6rem 0.8rem; border: 1px solid #ddd; text-align: left; vertical-align: top; }
         th { background: #f5f5f5; font-weight: 600; }
         tr:hover { background: #fafafa; }
+        .badge { display: inline-block; padding: 0.15rem 0.5rem; border-radius: 3px; font-size: 0.8rem; font-weight: 600; }
+        .badge-success { background: #d4edda; color: #155724; }
+        .badge-failed { background: #f8d7da; color: #721c24; }
+        .badge-skipped { background: #fff3cd; color: #856404; }
+        .badge-pending { background: #d1ecf1; color: #0c5460; }
     </style>
 </head>
 <body>
@@ -70,9 +80,10 @@
 
             <div class="actions" style="margin-bottom:0;">
                 <button type="submit" class="btn btn-primary">설정 저장</button>
-                <button type="button" class="btn btn-secondary" onclick="scanNow()">지금 스캔</button>
+                <button type="button" id="scanBtn" class="btn btn-secondary" onclick="scanNow()">지금 스캔</button>
                 <span id="scanProgress" class="meta" style="margin-top:0;"></span>
             </div>
+            <div id="scanResult" class="scan-result"></div>
         </form>
     </div>
 
@@ -81,23 +92,35 @@
         <table>
             <thead>
             <tr>
-                <th style="width:120px;">상태</th>
+                <th style="width:80px;">상태</th>
                 <th>파일명</th>
-                <th style="width:90px;">결과</th>
-                <th style="width:110px;">새 엔트리</th>
+                <th style="width:140px;">처리 시간</th>
+                <th style="width:60px;">결과</th>
+                <th style="width:80px;">새 엔트리</th>
                 <th>메시지</th>
             </tr>
             </thead>
             <tbody>
             <tr th:each="item : ${recentResultImports}">
-                <td th:text="${item.status}"></td>
+                <td>
+                    <span th:switch="${item.status}"
+                          th:classappend="${item.status == 'SUCCESS' ? 'badge-success' : (item.status == 'FAILED' ? 'badge-failed' : (item.status == 'SKIPPED' ? 'badge-skipped' : 'badge-pending'))}"
+                          class="badge">
+                        <span th:case="'SUCCESS'">성공</span>
+                        <span th:case="'FAILED'">실패</span>
+                        <span th:case="'SKIPPED'">스킵</span>
+                        <span th:case="'PENDING'">대기</span>
+                        <span th:case="*" th:text="${item.status}"></span>
+                    </span>
+                </td>
                 <td th:text="${item.fileName}"></td>
+                <td th:text="${item.processedAt != null ? #temporals.format(item.processedAt, 'MM-dd HH:mm:ss') : '-'}"></td>
                 <td th:text="${item.resultsCount != null ? item.resultsCount : '-'}"></td>
                 <td th:text="${item.newEntriesCount != null ? item.newEntriesCount : '-'}"></td>
                 <td th:text="${item.message != null ? item.message : '-'}"></td>
             </tr>
             <tr th:if="${recentResultImports.isEmpty()}">
-                <td colspan="5" style="text-align:center; color:#999;">처리 이력이 없습니다.</td>
+                <td colspan="6" style="text-align:center; color:#999;">처리 이력이 없습니다.</td>
             </tr>
             </tbody>
         </table>
@@ -108,19 +131,41 @@
     const SCAN_URL = /*[[@{/admin/result-import/scan}]]*/ '';
 
     function scanNow() {
+        const btn = document.getElementById('scanBtn');
         const progress = document.getElementById('scanProgress');
+        const result = document.getElementById('scanResult');
+
+        btn.disabled = true;
         progress.textContent = '스캔 중...';
+        result.className = 'scan-result';
+        result.textContent = '';
+
         fetch(SCAN_URL, { method: 'POST' })
             .then(r => r.json())
             .then(data => {
                 progress.textContent = '';
-                alert('스캔 완료: 파일 ' + data.scanned + '개, 성공 ' + data.imported + '개, 스킵 ' + data.skipped + '개, 실패 ' + data.failed + '개\n' +
-                      '결과 ' + data.results + '건, 새 엔트리 ' + data.newEntries + '건');
-                location.reload();
+                if (data.scanned === 0 && data.imported === 0 && data.skipped === 0 && data.failed === 0) {
+                    // 자동 스캔 락이 걸려있어 스킵되었거나 처리할 파일이 없을 때
+                    result.className = 'scan-result show busy';
+                    result.textContent = '실행 대상이 없거나 자동 스캔이 진행 중이어서 이번 호출은 건너뛰었습니다.';
+                } else {
+                    result.className = 'scan-result show ok';
+                    result.textContent =
+                        '스캔 완료 — 파일 ' + data.scanned +
+                        '개 / 성공 ' + data.imported +
+                        ' · 스킵 ' + data.skipped +
+                        ' · 실패 ' + data.failed +
+                        ' / 결과 ' + data.results +
+                        '건 · 새 엔트리 ' + data.newEntries + '건';
+                }
+                // 이력 테이블을 새로 보여주기 위해 지연 후 리로드
+                setTimeout(() => location.reload(), 1500);
             })
             .catch(err => {
                 progress.textContent = '';
-                alert('오류: ' + err.message);
+                result.className = 'scan-result show err';
+                result.textContent = '오류: ' + err.message;
+                btn.disabled = false;
             });
     }
 </script>

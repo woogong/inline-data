@@ -115,10 +115,11 @@ public class AutoResultImportService {
             return new ScanSummary(0, 0, 0, 0, 0, 0);
         }
         if (!running.compareAndSet(false, true)) {
-            log.info("자동 결과 등록이 이미 실행 중입니다.");
+            log.info("자동 결과 등록이 이미 실행 중입니다. 이번 호출은 건너뜁니다.");
             return new ScanSummary(0, 0, 0, 0, 0, 0);
         }
 
+        long startedAt = System.currentTimeMillis();
         int scanned = 0;
         int imported = 0;
         int skipped = 0;
@@ -127,8 +128,13 @@ public class AutoResultImportService {
         int newEntries = 0;
 
         try {
-            for (Path path : findCandidateFiles()) {
+            List<Path> candidates = findCandidateFiles();
+            log.info("자동 결과 스캔 시작: competitionId={} watchDir={} 후보 {}건",
+                    competitionId, watchDir, candidates.size());
+
+            for (Path path : candidates) {
                 scanned++;
+                log.info("파일 처리 시작 [{}/{}]: {}", scanned, candidates.size(), path.getFileName());
                 ProcessOutcome outcome = importFile(path, competitionId);
                 switch (outcome.status()) {
                     case "SUCCESS" -> {
@@ -140,6 +146,9 @@ public class AutoResultImportService {
                     default -> failed++;
                 }
             }
+            long elapsed = System.currentTimeMillis() - startedAt;
+            log.info("자동 결과 스캔 종료: {}ms 동안 스캔 {}건 / 성공 {} / 스킵 {} / 실패 {} / 결과 {} / 새 엔트리 {}",
+                    elapsed, scanned, imported, skipped, failed, results, newEntries);
             return new ScanSummary(scanned, imported, skipped, failed, results, newEntries);
         } finally {
             running.set(false);
