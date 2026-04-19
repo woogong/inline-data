@@ -8,6 +8,7 @@ import kr.pe.batang.inlinedata.repository.EventRepository;
 import kr.pe.batang.inlinedata.repository.EventResultRepository;
 import kr.pe.batang.inlinedata.repository.EventRoundRepository;
 import kr.pe.batang.inlinedata.repository.HeatEntryRepository;
+import kr.pe.batang.inlinedata.repository.projection.EventMedalRow;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -60,6 +61,33 @@ class EventServiceTest {
         given(eventRepository.findByCompetitionIdOrderByFirstEventNumber(1L))
                 .willReturn(List.of(createEvent(createCompetition())));
         assertThat(eventService.findByCompetitionId(1L)).hasSize(1);
+    }
+
+    @Test
+    @DisplayName("종목 탭 메달 프로젝션 — eventId별로 gold/silver/bronze 매핑")
+    void findMedalsByCompetitionId() {
+        given(eventResultRepository.findMedalRowsByCompetitionId(1L)).willReturn(List.of(
+                new EventMedalRow(10L, 1, "길동이", 100L),
+                new EventMedalRow(10L, 2, "채훈이", null),
+                new EventMedalRow(10L, 3, "민수이", 102L),
+                new EventMedalRow(20L, 1, "지연이", 200L),
+                new EventMedalRow(20L, 3, "유나이", 203L) // 은메달 누락 (EL 등으로 공석)
+        ));
+
+        var medals = eventService.findMedalsByCompetitionId(1L);
+
+        assertThat(medals).hasSize(2);
+        EventService.MedalInfo e10 = medals.get(10L);
+        assertThat(e10.gold()).isEqualTo("길동이");
+        assertThat(e10.goldId()).isEqualTo(100L);
+        assertThat(e10.silver()).isEqualTo("채훈이");
+        assertThat(e10.silverId()).isNull();
+        assertThat(e10.bronze()).isEqualTo("민수이");
+
+        EventService.MedalInfo e20 = medals.get(20L);
+        assertThat(e20.gold()).isEqualTo("지연이");
+        assertThat(e20.silver()).isNull();      // 은메달 없음
+        assertThat(e20.bronze()).isEqualTo("유나이");
     }
 
     @Test

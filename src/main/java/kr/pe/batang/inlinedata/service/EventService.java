@@ -14,6 +14,7 @@ import kr.pe.batang.inlinedata.repository.EventRepository;
 import kr.pe.batang.inlinedata.repository.EventResultRepository;
 import kr.pe.batang.inlinedata.repository.EventRoundRepository;
 import kr.pe.batang.inlinedata.repository.HeatEntryRepository;
+import kr.pe.batang.inlinedata.repository.projection.EventMedalRow;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -85,34 +86,24 @@ public class EventService {
     }
 
     public Map<Long, MedalInfo> findMedalsByCompetitionId(Long competitionId) {
-        List<EventResult> medalResults = eventResultRepository.findMedalResultsByCompetitionId(competitionId);
+        // 프로젝션으로 필요한 컬럼만 단일 쿼리. 엔티티 hydration / lazy load 없음.
+        List<EventMedalRow> rows = eventResultRepository.findMedalRowsByCompetitionId(competitionId);
 
-        Map<Long, MedalInfo> medals = new LinkedHashMap<>();
-        // eventId → ranking → {name, athleteId}
-        Map<Long, Map<Integer, String>> nameByEvent = new LinkedHashMap<>();
-        Map<Long, Map<Integer, Long>> idByEvent = new LinkedHashMap<>();
-        for (EventResult er : medalResults) {
-            Long eventId = er.getHeatEntry().getHeat().getEventRound().getEvent().getId();
-            var entry = er.getHeatEntry().getEntry();
-            nameByEvent.computeIfAbsent(eventId, k -> new LinkedHashMap<>())
-                    .putIfAbsent(er.getRanking(), entry.getAthleteName());
-            Long athleteId = entry.getAthlete() != null ? entry.getAthlete().getId() : null;
-            idByEvent.computeIfAbsent(eventId, k -> new LinkedHashMap<>())
-                    .putIfAbsent(er.getRanking(), athleteId);
+        // eventId → {1: name, 2: name, 3: name}, {1: id, 2: id, 3: id}
+        Map<Long, String[]> nameByEvent = new LinkedHashMap<>();
+        Map<Long, Long[]> idByEvent = new LinkedHashMap<>();
+        for (EventMedalRow row : rows) {
+            int idx = row.ranking() - 1;            // 1,2,3 → 0,1,2
+            if (idx < 0 || idx > 2) continue;
+            nameByEvent.computeIfAbsent(row.eventId(), k -> new String[3])[idx] = row.athleteName();
+            idByEvent.computeIfAbsent(row.eventId(), k -> new Long[3])[idx] = row.athleteId();
         }
 
-        List<Event> events = findByCompetitionId(competitionId);
-        for (Event event : events) {
-            Map<Integer, String> names = nameByEvent.get(event.getId());
-            Map<Integer, Long> ids = idByEvent.get(event.getId());
-            if (names == null) {
-                medals.put(event.getId(), new MedalInfo(null, null, null, null, null, null));
-                continue;
-            }
-            medals.put(event.getId(), new MedalInfo(
-                    names.get(1), ids != null ? ids.get(1) : null,
-                    names.get(2), ids != null ? ids.get(2) : null,
-                    names.get(3), ids != null ? ids.get(3) : null));
+        Map<Long, MedalInfo> medals = new LinkedHashMap<>();
+        for (Map.Entry<Long, String[]> e : nameByEvent.entrySet()) {
+            String[] n = e.getValue();
+            Long[] a = idByEvent.get(e.getKey());
+            medals.put(e.getKey(), new MedalInfo(n[0], a[0], n[1], a[1], n[2], a[2]));
         }
         return medals;
     }

@@ -1,6 +1,7 @@
 package kr.pe.batang.inlinedata.repository;
 
 import kr.pe.batang.inlinedata.entity.EventResult;
+import kr.pe.batang.inlinedata.repository.projection.EventMedalRow;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
@@ -44,6 +45,24 @@ public interface EventResultRepository extends JpaRepository<EventResult, Long> 
            "AND er.ranking IN (1, 2, 3) " +
            "ORDER BY e.id, er.ranking")
     List<EventResult> findMedalResultsByCompetitionId(@Param("compId") Long competitionId);
+
+    /**
+     * 종목 탭 전용 메달 프로젝션. 엔티티 전체를 로드하지 않고 필요한 컬럼만 가져와 lazy load를 원천 제거.
+     */
+    @Query("SELECT new kr.pe.batang.inlinedata.repository.projection.EventMedalRow(" +
+           "e.id, er.ranking, ce.athleteName, a.id) " +
+           "FROM EventResult er " +
+           "JOIN er.heatEntry he " +
+           "JOIN he.entry ce " +
+           "LEFT JOIN ce.athlete a " +
+           "JOIN he.heat eh " +
+           "JOIN eh.eventRound r " +
+           "JOIN r.event e " +
+           "WHERE e.competition.id = :compId " +
+           "AND r.round = '결승' " +
+           "AND er.ranking IN (1, 2, 3) " +
+           "ORDER BY e.id, er.ranking")
+    List<EventMedalRow> findMedalRowsByCompetitionId(@Param("compId") Long competitionId);
 
     @Query("SELECT er FROM EventResult er " +
            "JOIN FETCH er.heatEntry he " +
