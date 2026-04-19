@@ -6,6 +6,7 @@ import kr.pe.batang.inlinedata.entity.ResultSource;
 import kr.pe.batang.inlinedata.repository.CompetitionRepository;
 import kr.pe.batang.inlinedata.repository.ResultImportFileRepository;
 import kr.pe.batang.inlinedata.repository.ResultImportSettingRepository;
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
@@ -50,6 +51,13 @@ class AutoResultImportServiceTest {
 
     @TempDir
     Path tempDir;
+
+    @BeforeEach
+    void setUpSelfProxy() {
+        // 프로덕션에서는 Spring이 @Lazy self 필드에 프록시를 주입한다.
+        // 단위 테스트에서는 @InjectMocks가 채우지 않아 NPE가 나므로 자기 자신을 주입해 우회.
+        ReflectionTestUtils.setField(autoResultImportService, "self", autoResultImportService);
+    }
 
     @Test
     @DisplayName("안정화된 PDF를 스캔해 자동 등록한다")

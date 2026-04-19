@@ -7,7 +7,9 @@ import kr.pe.batang.inlinedata.repository.ResultImportFileRepository;
 import kr.pe.batang.inlinedata.repository.ResultImportSettingRepository;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
+import org.springframework.context.annotation.Lazy;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -40,6 +42,15 @@ public class AutoResultImportService {
     private final CompetitionRepository competitionRepository;
 
     private final AtomicBoolean running = new AtomicBoolean(false);
+
+    /**
+     * Spring 프록시를 통한 self 참조. {@link #importFile}를 파일마다 독립된 트랜잭션으로 실행하기 위해
+     * 직접 this.importFile(...)을 호출하지 않고 프록시 경유로 호출한다.
+     * (this.* 호출은 Spring AOP 프록시를 우회해서 @Transactional이 먹히지 않음)
+     */
+    @Autowired
+    @Lazy
+    private AutoResultImportService self;
 
     @Value("${app.result-import.watch-dir:}")
     private String watchDir;
@@ -105,7 +116,11 @@ public class AutoResultImportService {
         scanAndImport(competitionId);
     }
 
-    @Transactional
+    /**
+     * 이 메서드 자체에는 트랜잭션을 걸지 않는다. 파일 하나당 별도 트랜잭션을 {@link #importFile} 호출마다
+     * 열도록 self 프록시를 경유해 호출한다. 이렇게 하면 550개 같은 대량 스캔에서도 Hibernate 세션이
+     * 파일 단위로 닫혀 메모리/락 점유 시간이 제한된다.
+     */
     public ScanSummary scanAndImport(Long competitionId) {
         if (competitionId == null || competitionId <= 0) {
             return new ScanSummary(0, 0, 0, 0, 0, 0);
@@ -135,7 +150,8 @@ public class AutoResultImportService {
             for (Path path : candidates) {
                 scanned++;
                 log.info("파일 처리 시작 [{}/{}]: {}", scanned, candidates.size(), path.getFileName());
-                ProcessOutcome outcome = importFile(path, competitionId);
+                // self 프록시 경유: importFile의 @Transactional이 파일마다 독립 TX를 열어준다.
+                ProcessOutcome outcome = self.importFile(path, competitionId);
                 switch (outcome.status()) {
                     case "SUCCESS" -> {
                         imported++;
@@ -155,8 +171,12 @@ public class AutoResultImportService {
         }
     }
 
+    /**
+     * 단일 파일 임포트. public인 이유는 {@link #self} 프록시 경유 호출 대상이기 때문.
+     * 이 메서드 호출마다 새 TX가 열려 Hibernate 세션 캐시가 파일 단위로 해제된다.
+     */
     @Transactional
-    protected ProcessOutcome importFile(Path path, Long competitionId) {
+    public ProcessOutcome importFile(Path path, Long competitionId) {
         String fileName = path.getFileName().toString();
         ResultImportFile record = null;
         try {
