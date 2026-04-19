@@ -198,5 +198,15 @@ class AutoResultImportServiceTest {
         ReflectionTestUtils.setField(autoResultImportService, "archiveDir", archiveDir.toString());
         ReflectionTestUtils.setField(autoResultImportService, "errorDir", errorDir.toString());
         ReflectionTestUtils.setField(autoResultImportService, "stableWaitSeconds", 15L);
+        // @Value 필드는 Mockito 단위 테스트에서 주입되지 않아 기본값(0) 그대로면 타임아웃 0초,
+        // executor 스레드 수 0 등으로 동작. 명시적으로 주입.
+        ReflectionTestUtils.setField(autoResultImportService, "copyTimeoutSeconds", 30L);
+        ReflectionTestUtils.setField(autoResultImportService, "parallelDownloads", 2);
+        try {
+            Path staging = java.nio.file.Files.createTempDirectory("inline-staging-test-");
+            ReflectionTestUtils.setField(autoResultImportService, "stagingDir", staging.toString());
+        } catch (java.io.IOException e) {
+            throw new RuntimeException(e);
+        }
     }
 }
