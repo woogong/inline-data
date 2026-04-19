@@ -176,7 +176,8 @@ public class AutoResultImportService {
                     .status("PENDING")
                     .build());
 
-            ResultParsingService.ImportResult result = resultParsingService.parseResultPdf(path, competitionId);
+            ResultParsingService.ImportResult result = resultParsingService.parseResultPdf(
+                    path, competitionId, kr.pe.batang.inlinedata.entity.ResultSource.AUTO);
             if (result.filesProcessed() == 0 || result.results() == 0) {
                 record.markSkipped("처리 대상 결과가 없거나 경기 매칭에 실패했습니다.");
                 resultImportFileRepository.save(record);

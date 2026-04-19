@@ -4,6 +4,7 @@ import kr.pe.batang.inlinedata.controller.dto.EventFormDto;
 import jakarta.validation.Valid;
 import kr.pe.batang.inlinedata.entity.Event;
 import kr.pe.batang.inlinedata.entity.EventRound;
+import kr.pe.batang.inlinedata.entity.ResultSource;
 import kr.pe.batang.inlinedata.service.CompetitionService;
 import kr.pe.batang.inlinedata.service.EntryImportService;
 import kr.pe.batang.inlinedata.service.EntryService;
@@ -82,7 +83,7 @@ public class AdminEventController {
             out.flush();
         }
         try {
-            var result = resultParsingService.parseResultPdf(temp, compId);
+            var result = resultParsingService.parseResultPdf(temp, compId, ResultSource.UPLOAD);
             log.info("결과 PDF import 성공: {} → 결과 {}건, 새 엔트리 {}건",
                     fileName, result.results(), result.newEntries());
             return Map.of("status", "ok", "fileName", fileName != null ? fileName : "",
@@ -112,7 +113,7 @@ public class AdminEventController {
             out.flush();
         }
         try {
-            var result = resultParsingService.parseResultPdf(temp, compId);
+            var result = resultParsingService.parseResultPdf(temp, compId, ResultSource.UPLOAD);
             return Map.of("status", "ok", "results", result.results(), "newEntries", result.newEntries());
         } finally {
             Files.deleteIfExists(temp);

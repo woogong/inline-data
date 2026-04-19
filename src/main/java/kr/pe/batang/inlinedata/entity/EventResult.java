@@ -3,6 +3,8 @@ package kr.pe.batang.inlinedata.entity;
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
 import jakarta.persistence.EntityListeners;
+import jakarta.persistence.EnumType;
+import jakarta.persistence.Enumerated;
 import jakarta.persistence.FetchType;
 import jakarta.persistence.GeneratedValue;
 import jakarta.persistence.GenerationType;
@@ -16,6 +18,7 @@ import lombok.Builder;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
 import org.springframework.data.annotation.CreatedDate;
+import org.springframework.data.annotation.LastModifiedDate;
 import org.springframework.data.jpa.domain.support.AuditingEntityListener;
 
 import java.time.LocalDateTime;
@@ -50,27 +53,38 @@ public class EventResult {
     @Column(length = 100)
     private String note;
 
+    /** 이 행을 마지막으로 기록/수정한 출처. 덮어쓰기 우선순위 판정에 사용. */
+    @Enumerated(EnumType.STRING)
+    @Column(length = 10, nullable = false)
+    private ResultSource source;
+
     @CreatedDate
     @Column(updatable = false)
     private LocalDateTime createdAt;
 
+    @LastModifiedDate
+    private LocalDateTime updatedAt;
+
     @Builder
     public EventResult(HeatEntry heatEntry, Integer ranking, String record,
-                       String newRecord, String qualification, String note) {
+                       String newRecord, String qualification, String note,
+                       ResultSource source) {
         this.heatEntry = heatEntry;
         this.ranking = ranking;
         this.record = record;
         this.newRecord = newRecord;
         this.qualification = qualification;
         this.note = note;
+        this.source = source != null ? source : ResultSource.UPLOAD;
     }
 
     public void updateResult(Integer ranking, String record, String newRecord,
-                             String qualification, String note) {
+                             String qualification, String note, ResultSource source) {
         this.ranking = ranking;
         this.record = record;
         this.newRecord = newRecord;
         this.qualification = qualification;
         this.note = note;
+        if (source != null) this.source = source;
     }
 }

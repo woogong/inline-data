@@ -13,6 +13,8 @@ public interface EventResultRepository extends JpaRepository<EventResult, Long> 
 
     Optional<EventResult> findByHeatEntryId(Long heatEntryId);
 
+    List<EventResult> findByHeatEntryIdIn(List<Long> heatEntryIds);
+
     void deleteByHeatEntryIdIn(List<Long> heatEntryIds);
 
     /** 대회 단위 cascade 삭제용: 해당 competition에 속한 모든 EventResult 삭제. */

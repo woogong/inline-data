@@ -5,12 +5,15 @@ import kr.pe.batang.inlinedata.entity.CompetitionEntry;
 import kr.pe.batang.inlinedata.entity.Event;
 import kr.pe.batang.inlinedata.entity.EventHeat;
 import kr.pe.batang.inlinedata.entity.EventResult;
+import kr.pe.batang.inlinedata.entity.EventResultHistory;
 import kr.pe.batang.inlinedata.entity.EventRound;
 import kr.pe.batang.inlinedata.entity.HeatEntry;
+import kr.pe.batang.inlinedata.entity.ResultSource;
 import kr.pe.batang.inlinedata.repository.CompetitionEntryRepository;
 import kr.pe.batang.inlinedata.repository.CompetitionRepository;
 import kr.pe.batang.inlinedata.repository.EventHeatRepository;
 import kr.pe.batang.inlinedata.repository.EventRepository;
+import kr.pe.batang.inlinedata.repository.EventResultHistoryRepository;
 import kr.pe.batang.inlinedata.repository.EventResultRepository;
 import kr.pe.batang.inlinedata.repository.EventRoundRepository;
 import kr.pe.batang.inlinedata.repository.HeatEntryRepository;
@@ -48,13 +51,14 @@ public class ResultParsingService {
     private final EventHeatRepository eventHeatRepository;
     private final HeatEntryRepository heatEntryRepository;
     private final EventResultRepository eventResultRepository;
+    private final EventResultHistoryRepository eventResultHistoryRepository;
     private final CompetitionEntryRepository competitionEntryRepository;
     private final PdfTextExtractor pdfTextExtractor;
 
     public record ImportResult(int results, int newEntries, int filesProcessed) {}
 
     @Transactional
-    public ImportResult parseResultPdf(Path pdfPath, Long competitionId) throws IOException {
+    public ImportResult parseResultPdf(Path pdfPath, Long competitionId, ResultSource source) throws IOException {
         String text = pdfTextExtractor.extractText(pdfPath);
         if (text == null || text.isBlank()) return new ImportResult(0, 0, 0);
 
@@ -225,28 +229,45 @@ public class ResultParsingService {
                 compEntry.updateFromParsed(pr.region(), pr.teamName());
             }
 
-            // 결과 저장/갱신
+            // 결과 저장/갱신 (source 우선순위 체크)
             Optional<EventResult> existing = eventResultRepository.findByHeatEntryId(heatEntry.getId());
             if (existing.isPresent()) {
-                existing.get().updateResult(pr.ranking(), pr.record(), pr.newRecord(), pr.qualification(), pr.note());
+                EventResult er = existing.get();
+                if (!source.canOverwrite(er.getSource())) {
+                    log.debug("상위 출처가 기록한 결과라 건너뜀: heatEntry={} existing={} new={}",
+                            heatEntry.getId(), er.getSource(), source);
+                    continue;
+                }
+                er.updateResult(pr.ranking(), pr.record(), pr.newRecord(), pr.qualification(), pr.note(), source);
+                writeHistory(er, source);
             } else {
-                eventResultRepository.save(EventResult.builder()
+                EventResult saved = eventResultRepository.save(EventResult.builder()
                         .heatEntry(heatEntry).ranking(pr.ranking()).record(pr.record())
-                        .newRecord(pr.newRecord()).qualification(pr.qualification()).note(pr.note()).build());
+                        .newRecord(pr.newRecord()).qualification(pr.qualification()).note(pr.note())
+                        .source(source).build());
+                writeHistory(saved, source);
             }
             resultCount++;
         }
 
         // 결과에 없는 사전등록 엔트리 제거 (result PDF가 있어야 지움 → 파싱 실패 시 보호)
+        // 단, AUTO 소스는 MANUAL/UPLOAD로 기록된 EventResult를 보유한 HeatEntry는 건드리지 않는다.
         if (!results.isEmpty() && !existingEntries.isEmpty()) {
-            List<Long> toDelete = existingEntries.stream()
+            List<Long> candidates = existingEntries.stream()
                     .map(HeatEntry::getId)
                     .filter(id -> !matchedHeatEntryIds.contains(id))
                     .toList();
+            List<Long> toDelete = source == ResultSource.AUTO
+                    ? filterAutoDeletable(candidates) : candidates;
             if (!toDelete.isEmpty()) {
                 eventResultRepository.deleteByHeatEntryIdIn(toDelete);
                 heatEntryRepository.deleteAllById(toDelete);
-                log.info("결과에 없는 사전등록 엔트리 {}건 제거 (heat_id={})", toDelete.size(), targetHeat.getId());
+                log.info("결과에 없는 사전등록 엔트리 {}건 제거 (heat_id={}, source={})",
+                        toDelete.size(), targetHeat.getId(), source);
+            }
+            if (source == ResultSource.AUTO && toDelete.size() < candidates.size()) {
+                log.info("AUTO 소스라 상위 출처 결과를 보유한 HeatEntry {}건은 삭제 스킵",
+                        candidates.size() - toDelete.size());
             }
         }
 
@@ -271,10 +292,32 @@ public class ResultParsingService {
         for (int i = 0; i < allResults.size(); i++) {
             EventResult er = allResults.get(i);
             Integer newRanking = er.getRecord() != null ? i + 1 : null;
+            // ranking만 재계산; 소스는 건드리지 않는다 (DTT 재정렬은 내부 계산, 외부 덮어쓰기 아님)
             er.updateResult(newRanking, er.getRecord(), er.getNewRecord(),
-                    er.getQualification(), er.getNote());
+                    er.getQualification(), er.getNote(), null);
         }
         log.info("DTT rankings recalculated for round {}: {} results", eventRoundId, allResults.size());
+    }
+
+    /** 모든 EventResult 저장/수정 시 동일한 스냅샷을 history에 append. */
+    private void writeHistory(EventResult er, ResultSource source) {
+        eventResultHistoryRepository.save(EventResultHistory.builder()
+                .eventResultId(er.getId())
+                .heatEntryId(er.getHeatEntry().getId())
+                .source(source)
+                .ranking(er.getRanking()).record(er.getRecord()).newRecord(er.getNewRecord())
+                .qualification(er.getQualification()).note(er.getNote())
+                .build());
+    }
+
+    /** AUTO 소스 cleanup 대상 중, 상위 출처(MANUAL/UPLOAD)가 기록한 EventResult가 붙은 HeatEntry는 제외. */
+    private List<Long> filterAutoDeletable(List<Long> heatEntryIds) {
+        if (heatEntryIds.isEmpty()) return heatEntryIds;
+        Set<Long> protectedIds = eventResultRepository.findByHeatEntryIdIn(heatEntryIds).stream()
+                .filter(er -> er.getSource() == ResultSource.MANUAL || er.getSource() == ResultSource.UPLOAD)
+                .map(er -> er.getHeatEntry().getId())
+                .collect(java.util.stream.Collectors.toSet());
+        return heatEntryIds.stream().filter(id -> !protectedIds.contains(id)).toList();
     }
 
     /**

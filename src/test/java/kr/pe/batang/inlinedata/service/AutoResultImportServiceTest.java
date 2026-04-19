@@ -2,6 +2,7 @@ package kr.pe.batang.inlinedata.service;
 
 import kr.pe.batang.inlinedata.entity.ResultImportFile;
 import kr.pe.batang.inlinedata.entity.ResultImportSetting;
+import kr.pe.batang.inlinedata.entity.ResultSource;
 import kr.pe.batang.inlinedata.repository.CompetitionRepository;
 import kr.pe.batang.inlinedata.repository.ResultImportFileRepository;
 import kr.pe.batang.inlinedata.repository.ResultImportSettingRepository;
@@ -63,7 +64,7 @@ class AutoResultImportServiceTest {
         given(resultImportFileRepository.findByCompetitionIdAndFileHash(eq(10L), anyString())).willReturn(java.util.Optional.empty());
         given(resultImportFileRepository.save(any(ResultImportFile.class)))
                 .willAnswer(invocation -> invocation.getArgument(0));
-        given(resultParsingService.parseResultPdf(any(Path.class), any(Long.class)))
+        given(resultParsingService.parseResultPdf(any(Path.class), any(Long.class), eq(ResultSource.AUTO)))
                 .willReturn(new ResultParsingService.ImportResult(3, 1, 1));
 
         AutoResultImportService.ScanSummary result = autoResultImportService.scanAndImport(10L);
@@ -90,7 +91,7 @@ class AutoResultImportServiceTest {
         given(resultImportFileRepository.findByCompetitionIdAndFileHash(eq(8L), anyString())).willReturn(java.util.Optional.empty());
         given(resultImportFileRepository.save(any(ResultImportFile.class)))
                 .willAnswer(invocation -> invocation.getArgument(0));
-        given(resultParsingService.parseResultPdf(any(Path.class), eq(8L)))
+        given(resultParsingService.parseResultPdf(any(Path.class), eq(8L), eq(ResultSource.AUTO)))
                 .willReturn(new ResultParsingService.ImportResult(2, 0, 1));
 
         AutoResultImportService.ScanSummary result = autoResultImportService.scanAndImport(8L);
@@ -119,7 +120,7 @@ class AutoResultImportServiceTest {
 
         assertThat(result.scanned()).isEqualTo(1);
         assertThat(result.skipped()).isEqualTo(1);
-        then(resultParsingService).should(never()).parseResultPdf(any(Path.class), any(Long.class));
+        then(resultParsingService).should(never()).parseResultPdf(any(Path.class), any(Long.class), eq(ResultSource.AUTO));
         assertThat(Files.exists(archiveDir.resolve("2-result.pdf"))).isTrue();
     }
 
@@ -138,7 +139,7 @@ class AutoResultImportServiceTest {
         assertThat(result.scanned()).isEqualTo(1);
         assertThat(result.skipped()).isEqualTo(1);
         then(resultImportFileRepository).should(never()).save(any(ResultImportFile.class));
-        then(resultParsingService).should(never()).parseResultPdf(any(Path.class), any(Long.class));
+        then(resultParsingService).should(never()).parseResultPdf(any(Path.class), any(Long.class), eq(ResultSource.AUTO));
         assertThat(Files.exists(pdf)).isTrue();
     }
 
@@ -176,7 +177,7 @@ class AutoResultImportServiceTest {
         given(resultImportFileRepository.findByCompetitionIdAndFileHash(eq(7L), anyString())).willReturn(java.util.Optional.empty());
         given(resultImportFileRepository.save(any(ResultImportFile.class)))
                 .willAnswer(invocation -> invocation.getArgument(0));
-        given(resultParsingService.parseResultPdf(any(Path.class), eq(7L)))
+        given(resultParsingService.parseResultPdf(any(Path.class), eq(7L), eq(ResultSource.AUTO)))
                 .willReturn(new ResultParsingService.ImportResult(1, 0, 1));
 
         AutoResultImportService.ScanSummary result = autoResultImportService.scanUsingCurrentSetting();

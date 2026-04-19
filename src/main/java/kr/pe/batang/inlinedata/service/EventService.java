@@ -6,11 +6,14 @@ import kr.pe.batang.inlinedata.entity.CompetitionEntry;
 import kr.pe.batang.inlinedata.entity.Event;
 import kr.pe.batang.inlinedata.entity.EventHeat;
 import kr.pe.batang.inlinedata.entity.EventResult;
+import kr.pe.batang.inlinedata.entity.EventResultHistory;
 import kr.pe.batang.inlinedata.entity.EventRound;
 import kr.pe.batang.inlinedata.entity.HeatEntry;
+import kr.pe.batang.inlinedata.entity.ResultSource;
 import kr.pe.batang.inlinedata.repository.CompetitionEntryRepository;
 import kr.pe.batang.inlinedata.repository.EventHeatRepository;
 import kr.pe.batang.inlinedata.repository.EventRepository;
+import kr.pe.batang.inlinedata.repository.EventResultHistoryRepository;
 import kr.pe.batang.inlinedata.repository.EventResultRepository;
 import kr.pe.batang.inlinedata.repository.EventRoundRepository;
 import kr.pe.batang.inlinedata.repository.HeatEntryRepository;
@@ -40,6 +43,7 @@ public class EventService {
     private final EventHeatRepository eventHeatRepository;
     private final HeatEntryRepository heatEntryRepository;
     private final EventResultRepository eventResultRepository;
+    private final EventResultHistoryRepository eventResultHistoryRepository;
     private final CompetitionService competitionService;
 
     // --- Event (종목) ---
@@ -189,16 +193,12 @@ public class EventService {
         allResults.sort(Comparator.comparing(
                 (EventResult er) -> er.getRecord() != null ? er.getRecord() : "zzz"));
 
-        // 순위 재할당
+        // 순위 재할당 (내부 재계산: source 건드리지 않음)
         for (int i = 0; i < allResults.size(); i++) {
             EventResult er = allResults.get(i);
-            if (er.getRecord() != null) {
-                er.updateResult(i + 1, er.getRecord(), er.getNewRecord(),
-                        er.getQualification(), er.getNote());
-            } else {
-                er.updateResult(null, er.getRecord(), er.getNewRecord(),
-                        er.getQualification(), er.getNote());
-            }
+            Integer newRanking = er.getRecord() != null ? i + 1 : null;
+            er.updateResult(newRanking, er.getRecord(), er.getNewRecord(),
+                    er.getQualification(), er.getNote(), null);
         }
         return allResults.size();
     }
@@ -652,18 +652,29 @@ public class EventService {
         HeatEntry heatEntry = heatEntryRepository.findById(heatEntryId)
                 .orElseThrow(() -> new IllegalArgumentException("출전 엔트리를 찾을 수 없습니다. id=" + heatEntryId));
         Optional<EventResult> existing = eventResultRepository.findByHeatEntryId(heatEntryId);
+        EventResult er;
         if (existing.isPresent()) {
-            existing.get().updateResult(ranking, record, newRecord, qualification, note);
+            // 관리자 직접 수정은 최상위 우선순위 — 어떤 소스의 기록이든 덮어쓴다.
+            er = existing.get();
+            er.updateResult(ranking, record, newRecord, qualification, note, ResultSource.MANUAL);
         } else {
-            eventResultRepository.save(EventResult.builder()
+            er = eventResultRepository.save(EventResult.builder()
                     .heatEntry(heatEntry)
                     .ranking(ranking)
                     .record(record)
                     .newRecord(newRecord)
                     .qualification(qualification)
                     .note(note)
+                    .source(ResultSource.MANUAL)
                     .build());
         }
+        eventResultHistoryRepository.save(EventResultHistory.builder()
+                .eventResultId(er.getId())
+                .heatEntryId(heatEntry.getId())
+                .source(ResultSource.MANUAL)
+                .ranking(ranking).record(record).newRecord(newRecord)
+                .qualification(qualification).note(note)
+                .build());
     }
 
     public AthleteProfileInfo findAthleteProfile(Long competitionId, String athleteName) {

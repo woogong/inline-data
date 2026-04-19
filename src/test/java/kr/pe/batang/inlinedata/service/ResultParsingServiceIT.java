@@ -7,10 +7,12 @@ import kr.pe.batang.inlinedata.entity.EventHeat;
 import kr.pe.batang.inlinedata.entity.EventResult;
 import kr.pe.batang.inlinedata.entity.EventRound;
 import kr.pe.batang.inlinedata.entity.HeatEntry;
+import kr.pe.batang.inlinedata.entity.ResultSource;
 import kr.pe.batang.inlinedata.repository.CompetitionEntryRepository;
 import kr.pe.batang.inlinedata.repository.CompetitionRepository;
 import kr.pe.batang.inlinedata.repository.EventHeatRepository;
 import kr.pe.batang.inlinedata.repository.EventRepository;
+import kr.pe.batang.inlinedata.repository.EventResultHistoryRepository;
 import kr.pe.batang.inlinedata.repository.EventResultRepository;
 import kr.pe.batang.inlinedata.repository.EventRoundRepository;
 import kr.pe.batang.inlinedata.repository.HeatEntryRepository;
@@ -52,6 +54,7 @@ class ResultParsingServiceIT {
     @Autowired private EventHeatRepository eventHeatRepository;
     @Autowired private HeatEntryRepository heatEntryRepository;
     @Autowired private EventResultRepository eventResultRepository;
+    @Autowired private EventResultHistoryRepository eventResultHistoryRepository;
     @Autowired private CompetitionEntryRepository competitionEntryRepository;
 
     @MockitoBean private PdfTextExtractor pdfTextExtractor;
@@ -83,7 +86,7 @@ class ResultParsingServiceIT {
 
         // when
         ResultParsingService.ImportResult result = resultParsingService.parseResultPdf(
-                dummyPath("individual_time_race.pdf"), competition.getId());
+                dummyPath("individual_time_race.pdf"), competition.getId(), ResultSource.UPLOAD);
 
         // then
         assertThat(result.results()).isEqualTo(3);
@@ -130,7 +133,7 @@ class ResultParsingServiceIT {
 
         // when
         ResultParsingService.ImportResult result = resultParsingService.parseResultPdf(
-                dummyPath("dtt_points_race.pdf"), competition.getId());
+                dummyPath("dtt_points_race.pdf"), competition.getId(), ResultSource.UPLOAD);
 
         // then
         assertThat(result.results()).isEqualTo(3);
@@ -167,7 +170,7 @@ class ResultParsingServiceIT {
 
         // when
         ResultParsingService.ImportResult result = resultParsingService.parseResultPdf(
-                dummyPath("team_relay.pdf"), competition.getId());
+                dummyPath("team_relay.pdf"), competition.getId(), ResultSource.UPLOAD);
 
         // then
         assertThat(result.results()).isEqualTo(3);
@@ -199,7 +202,7 @@ class ResultParsingServiceIT {
                 .competition(competition).divisionName("남중부").gender("M")
                 .eventName("500m+D").teamEvent(false).build());
         mockPdfExtraction("individual_time_race");
-        resultParsingService.parseResultPdf(dummyPath("individual_time_race.pdf"), competition.getId());
+        resultParsingService.parseResultPdf(dummyPath("individual_time_race.pdf"), competition.getId(), ResultSource.UPLOAD);
 
         // when: 길동이와 채훈이가 bib 맞바꿈 (31 ↔ 45)
         String swappedRaw = """
@@ -221,7 +224,7 @@ class ResultParsingServiceIT {
                 .replace(" 2     45    채훈이", " 2     31    채훈이");
         given(pdfTextExtractor.extractText(any())).willReturn(layout);
         given(pdfTextExtractor.extractTextRaw(any())).willReturn(swappedRaw);
-        resultParsingService.parseResultPdf(dummyPath("individual_time_race.pdf"), competition.getId());
+        resultParsingService.parseResultPdf(dummyPath("individual_time_race.pdf"), competition.getId(), ResultSource.UPLOAD);
 
         // then: UK 충돌 없이 swap 반영
         List<HeatEntry> entries = heatEntryRepository.findAll();
@@ -255,7 +258,7 @@ class ResultParsingServiceIT {
                 """;
         given(pdfTextExtractor.extractText(any())).willReturn(readFixture("individual_time_race.layout.txt"));
         given(pdfTextExtractor.extractTextRaw(any())).willReturn(rawWithBadRegion);
-        resultParsingService.parseResultPdf(dummyPath("individual_time_race.pdf"), competition.getId());
+        resultParsingService.parseResultPdf(dummyPath("individual_time_race.pdf"), competition.getId(), ResultSource.UPLOAD);
 
         List<HeatEntry> entries = heatEntryRepository.findAll();
         assertThat(entries).hasSize(1);
@@ -271,7 +274,7 @@ class ResultParsingServiceIT {
                 .competition(competition).divisionName("남중부").gender("M")
                 .eventName("500m+D").teamEvent(false).build());
         mockPdfExtraction("individual_time_race");
-        resultParsingService.parseResultPdf(dummyPath("individual_time_race.pdf"), competition.getId());
+        resultParsingService.parseResultPdf(dummyPath("individual_time_race.pdf"), competition.getId(), ResultSource.UPLOAD);
         assertThat(heatEntryRepository.findAll()).hasSize(3);
 
         // when: 2명만 있는 줄어든 결과로 재파싱
@@ -292,13 +295,105 @@ class ResultParsingServiceIT {
                 .replace(" 3     12    민수이               부산테스트클럽     52.001\n", "");
         given(pdfTextExtractor.extractText(any())).willReturn(reducedLayout);
         given(pdfTextExtractor.extractTextRaw(any())).willReturn(reducedRaw);
-        resultParsingService.parseResultPdf(dummyPath("individual_time_race.pdf"), competition.getId());
+        resultParsingService.parseResultPdf(dummyPath("individual_time_race.pdf"), competition.getId(), ResultSource.UPLOAD);
 
         // then: 매칭 안 된 bib=12 엔트리는 제거됨
         assertThat(heatEntryRepository.findAll()).hasSize(2);
         assertThat(heatEntryRepository.findAll())
                 .extracting(HeatEntry::getBibNumber)
                 .containsExactlyInAnyOrder(31, 45);
+    }
+
+    @Test
+    @DisplayName("AUTO 소스는 UPLOAD로 기록된 결과를 덮어쓰지 못한다")
+    void autoCannotOverwriteUpload() throws IOException {
+        // given: UPLOAD로 첫 임포트
+        eventRepository.save(Event.builder()
+                .competition(competition).divisionName("남중부").gender("M")
+                .eventName("500m+D").teamEvent(false).build());
+        mockPdfExtraction("individual_time_race");
+        resultParsingService.parseResultPdf(dummyPath("individual_time_race.pdf"), competition.getId(), ResultSource.UPLOAD);
+
+        HeatEntry gildong = heatEntryRepository.findAll().stream()
+                .filter(e -> "길동이".equals(e.getEntry().getAthleteName())).findFirst().orElseThrow();
+        EventResult orig = eventResultRepository.findByHeatEntryId(gildong.getId()).orElseThrow();
+        assertThat(orig.getSource()).isEqualTo(ResultSource.UPLOAD);
+        assertThat(orig.getRecord()).isEqualTo("46.993");
+
+        // when: AUTO가 같은 행을 다른 기록으로 덮어쓰려 함
+        String autoRaw = """
+                2026 테스트 오픈 인라인 대회
+                테스트시
+                4-7 남자중학부(Men.Middle School) 500m+D
+                예선7조
+                순위
+                등번호
+                이름
+                소속
+                기록
+                서울테스트클럽 1 31 길동이 99.999
+                세종테스트클럽 2 45 채훈이 51.671
+                부산테스트클럽 3 12 민수이 52.001
+                """;
+        given(pdfTextExtractor.extractText(any())).willReturn(readFixture("individual_time_race.layout.txt"));
+        given(pdfTextExtractor.extractTextRaw(any())).willReturn(autoRaw);
+        resultParsingService.parseResultPdf(dummyPath("individual_time_race.pdf"), competition.getId(), ResultSource.AUTO);
+
+        // then: 길동이의 기록은 AUTO 덮어쓰기를 무시하고 UPLOAD 값 유지
+        EventResult after = eventResultRepository.findByHeatEntryId(gildong.getId()).orElseThrow();
+        assertThat(after.getRecord()).isEqualTo("46.993");
+        assertThat(after.getSource()).isEqualTo(ResultSource.UPLOAD);
+    }
+
+    @Test
+    @DisplayName("UPLOAD는 UPLOAD를 덮어쓸 수 있다 (동순위)")
+    void uploadCanOverwriteUpload() throws IOException {
+        eventRepository.save(Event.builder()
+                .competition(competition).divisionName("남중부").gender("M")
+                .eventName("500m+D").teamEvent(false).build());
+        mockPdfExtraction("individual_time_race");
+        resultParsingService.parseResultPdf(dummyPath("individual_time_race.pdf"), competition.getId(), ResultSource.UPLOAD);
+
+        HeatEntry gildong = heatEntryRepository.findAll().stream()
+                .filter(e -> "길동이".equals(e.getEntry().getAthleteName())).findFirst().orElseThrow();
+
+        String uploadRaw = """
+                2026 테스트 오픈 인라인 대회
+                테스트시
+                4-7 남자중학부(Men.Middle School) 500m+D
+                예선7조
+                순위
+                등번호
+                이름
+                소속
+                기록
+                서울테스트클럽 1 31 길동이 45.500
+                세종테스트클럽 2 45 채훈이 51.671
+                부산테스트클럽 3 12 민수이 52.001
+                """;
+        given(pdfTextExtractor.extractText(any())).willReturn(readFixture("individual_time_race.layout.txt"));
+        given(pdfTextExtractor.extractTextRaw(any())).willReturn(uploadRaw);
+        resultParsingService.parseResultPdf(dummyPath("individual_time_race.pdf"), competition.getId(), ResultSource.UPLOAD);
+
+        EventResult after = eventResultRepository.findByHeatEntryId(gildong.getId()).orElseThrow();
+        assertThat(after.getRecord()).isEqualTo("45.500");
+    }
+
+    @Test
+    @DisplayName("모든 save는 EventResultHistory에 append 됨")
+    void historyAppendedOnEveryWrite() throws IOException {
+        eventRepository.save(Event.builder()
+                .competition(competition).divisionName("남중부").gender("M")
+                .eventName("500m+D").teamEvent(false).build());
+        mockPdfExtraction("individual_time_race");
+
+        resultParsingService.parseResultPdf(dummyPath("individual_time_race.pdf"), competition.getId(), ResultSource.UPLOAD);
+        // 첫 임포트: 3개 결과 × 1 = history 3건
+        assertThat(eventResultHistoryRepository.findAll()).hasSize(3);
+
+        // 재임포트: 동일 3건에 대해 history 추가 append → 총 6건
+        resultParsingService.parseResultPdf(dummyPath("individual_time_race.pdf"), competition.getId(), ResultSource.UPLOAD);
+        assertThat(eventResultHistoryRepository.findAll()).hasSize(6);
     }
 
     // ============================================================
