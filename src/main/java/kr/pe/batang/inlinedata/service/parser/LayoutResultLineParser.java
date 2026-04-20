@@ -178,6 +178,15 @@ public final class LayoutResultLineParser {
                 lane = laneOrRank;
             }
 
+            // 팀명이 너무 길어 다음 줄로 쪼개진 경우 (예: "POWERSLIDE TEAM TAIWAN - B"가 "- "에서 끊김)
+            // 현재 rest에 시간 기록이 없고 다음 비-푸터 라인에 기록이 있으면 그 라인을 합친다.
+            if (!TIME_RECORD.matcher(rest).find()) {
+                String continuation = findTeamRowContinuation(lines, i);
+                if (continuation != null) {
+                    rest = rest + "   " + continuation;
+                }
+            }
+
             String[] parts = rest.split("\\s{2,}");
             String teamEntryName = parts.length >= 1 ? parts[0].trim() : null;
             String region = parts.length >= 2 ? parts[1].trim() : null;
@@ -185,6 +194,32 @@ public final class LayoutResultLineParser {
             // parts[1]이 시도가 아니라 기록(시간/점수)이라면 region을 null로 되돌려 아래 분리 로직을 태운다.
             if (region != null && (TIME_RECORD.matcher(region).matches() || region.matches("^\\d+$"))) {
                 region = null;
+            }
+
+            // 팀명 마지막 토큰이 IOC 코드(3글자 대문자) 또는 한국 시도명이면 region으로 분리.
+            // wrap된 경우 team 뒤에 region이 붙어있고 그 다음 parts[1]이 team의 나머지 조각인 상황도 처리.
+            // 예: parts[0]="POWERSLIDE TEAM TAIWAN - TPE", parts[1]="B" → team="POWERSLIDE TEAM TAIWAN - B", region="TPE"
+            if (teamEntryName != null) {
+                String[] tokens = teamEntryName.split(" ");
+                String lastToken = tokens[tokens.length - 1];
+                boolean lastIsRegion = lastToken.matches("[A-Z]{3}")
+                        || RegionNormalizer.isValidKoreanRegion(lastToken);
+                if (lastIsRegion && tokens.length > 1) {
+                    String teamWithoutLast = String.join(" ",
+                            java.util.Arrays.copyOfRange(tokens, 0, tokens.length - 1));
+                    // parts[1]이 "B" 같은 짧은 팀명 접미사이고 team이 "-"로 끝나면 이어 붙여 완성.
+                    boolean looksLikeTeamSuffix = parts.length > 1
+                            && parts[1].length() <= 3
+                            && !parts[1].matches("^\\d.*")
+                            && !TIME_RECORD.matcher(parts[1]).find();
+                    if (teamWithoutLast.endsWith("-") && looksLikeTeamSuffix) {
+                        teamEntryName = teamWithoutLast + " " + parts[1];
+                        region = lastToken;
+                    } else if (region == null) {
+                        teamEntryName = teamWithoutLast;
+                        region = lastToken;
+                    }
+                }
             }
 
             // 팀명과 시도가 붙어있는 경우 분리. 두 단계 시도:
@@ -231,6 +266,26 @@ public final class LayoutResultLineParser {
     }
 
     private static final Pattern LEADING_QUAL_MARK = Pattern.compile("^Q\\s+(.+)$");
+
+    /**
+     * 현재 라인 이후에서 wrap된 단체전 행의 계속 라인을 찾는다.
+     * 기준: 다음 비-푸터 라인이 "새 결과 행"이 아니고 시간 기록을 포함하면 continuation으로 간주.
+     */
+    private static String findTeamRowContinuation(String[] lines, int currentIdx) {
+        for (int j = currentIdx + 1; j < lines.length; j++) {
+            String t = lines[j].trim();
+            if (t.isEmpty()) continue;
+            if (isFooter(t)) return null;
+            // 다음 결과 행(선택적 Q 접두 + rank 시작)이면 continuation 아님
+            if (LEADING_QUAL_MARK.matcher(t).matches()) return null;
+            if (RESULT_ROW.matcher(t).matches()) return null;
+            // 시간 기록이 포함된 라인이면 wrap된 tail.
+            if (TIME_RECORD.matcher(t).find()) return t;
+            // 그 외에는 continuation 아님 (members 등). 더 진행하지 않음
+            return null;
+        }
+        return null;
+    }
 
     // ============================================================
     // helpers

@@ -115,6 +115,41 @@ class LayoutResultLineParserTest {
         }
 
         @Test
+        @DisplayName("팀명이 길어 두 줄로 쪼개진 외국 팀 (122-2 POWERSLIDE TEAM TAIWAN - B)")
+        void wrappedLongForeignTeamName() {
+            String[] lines = {
+                    " 순위          팀명          시도        기록      진출여부",
+                    "Q     1      POWERSLIDE TEAM TAIWAN - TPE",
+                    "                                        B       4:50.056       Q",
+                    "             (12LIN SHR- WEI,14YA-FU HSU,11HUNG-I WU)",
+                    "Q     2      슈퍼비클럽                    부산        4:51.871       Q",
+                    "             (55강동원,58황성빈,56김시윤)",
+                    "      3      Powerslide China 2       CHN       5:06.985",
+                    "             (45SU YU ANG,48ZHOU LE HANG,44AN CHENG YU)"
+            };
+            List<ParsedResult> r = LayoutResultLineParser.parseTeam(lines);
+            assertThat(r).hasSize(3);
+
+            // 1위: 긴 팀명이 두 줄로 쪼개져 TPE가 중간 위치에 끼었지만 올바르게 재구성되어야 함
+            assertThat(r.get(0).ranking()).isEqualTo(1);
+            assertThat(r.get(0).teamName()).isEqualTo("POWERSLIDE TEAM TAIWAN - B");
+            assertThat(r.get(0).region()).isEqualTo("TPE");
+            assertThat(r.get(0).record()).isEqualTo("4:50.056");
+            assertThat(r.get(0).qualification()).isEqualTo("Q");
+
+            // 2위: 한국 팀 (한 줄)
+            assertThat(r.get(1).teamName()).isEqualTo("슈퍼비클럽");
+            assertThat(r.get(1).region()).isEqualTo("부산");
+            assertThat(r.get(1).record()).isEqualTo("4:51.871");
+
+            // 3위: 외국 팀 (한 줄)
+            assertThat(r.get(2).teamName()).isEqualTo("Powerslide China 2");
+            assertThat(r.get(2).region()).isEqualTo("CHN");
+            assertThat(r.get(2).record()).isEqualTo("5:06.985");
+            assertThat(r.get(2).qualification()).isNull();
+        }
+
+        @Test
         @DisplayName("순위 컬럼만 있고 레인 없는 단일숫자 포맷")
         void singleNumberRankOnly() {
             String[] lines = {
