@@ -114,23 +114,55 @@ public class ResultParsingService {
         final int finalEventNumber = eventNumber;
         final int finalHeatNumber = heatNumber;
 
-        // EventRound 찾기. 없으면 PDF 정보로 자동 생성
+        // EventRound 찾기. event_number로 1차 후보 검색 후, 모호하면 division+event+round로 좁힌다.
+        // PDF 헤더 정보 추출
+        String roundName = null;
+        String divisionName = null;
+        String genderCode = null;
+        if (divisionRaw != null && genderChar != null) {
+            roundName = LinePreprocessor.parseRoundName(lines, headerLineIdx);
+            divisionName = DivisionNormalizer.normalize(genderChar, divisionRaw);
+            genderCode = genderChar.equals("여") ? "F" : "M";
+        }
+
         List<EventRound> rounds = eventRoundRepository.findByEvent_CompetitionIdOrderByEventNumberAsc(competitionId);
-        EventRound targetRound = rounds.stream()
+        List<EventRound> byNumber = rounds.stream()
                 .filter(r -> r.getEventNumber() != null && r.getEventNumber() == finalEventNumber)
-                .findFirst().orElse(null);
-        if (targetRound == null && divisionRaw != null && eventName != null && genderChar != null) {
-            String roundName = LinePreprocessor.parseRoundName(lines, headerLineIdx);
-            String divisionName = DivisionNormalizer.normalize(genderChar, divisionRaw);
-            String genderCode = genderChar.equals("여") ? "F" : "M";
+                .toList();
+        EventRound targetRound;
+        if (byNumber.size() == 1) {
+            targetRound = byNumber.get(0);
+        } else if (byNumber.size() > 1 && divisionName != null && eventName != null && genderCode != null && roundName != null) {
+            final String dn = divisionName, gc = genderCode, en = eventName, rn = roundName;
+            targetRound = byNumber.stream()
+                    .filter(r -> dn.equals(r.getEvent().getDivisionName())
+                            && gc.equals(r.getEvent().getGender())
+                            && en.equals(r.getEvent().getEventName())
+                            && rn.equals(r.getRound()))
+                    .findFirst().orElse(null);
+            if (targetRound == null) {
+                log.warn("event_number={} 후보가 {}개이나 division/event/round 매칭 실패: {} (division={}, event={}, round={})",
+                        finalEventNumber, byNumber.size(), pdfPath.getFileName(), dn, en, rn);
+            }
+        } else {
+            targetRound = null;
+        }
+
+        // event_number로 못 찾으면 division+event+round로 검색 (번호가 바뀌었을 수 있음)
+        if (targetRound == null && divisionName != null && eventName != null && genderCode != null && roundName != null) {
             Event event = eventRepository
                     .findByCompetitionIdAndDivisionNameAndGenderAndEventName(competitionId, divisionName, genderCode, eventName)
                     .orElse(null);
-            if (event != null && roundName != null) {
-                // 동일 이벤트에 같은 round 이름이 이미 있으면 재사용 (eventNumber만 업데이트)
+            if (event != null) {
                 targetRound = eventRoundRepository.findByEventIdAndRound(event.getId(), roundName)
                         .orElse(null);
-                if (targetRound == null) {
+                if (targetRound != null) {
+                    if (targetRound.getEventNumber() == null || targetRound.getEventNumber() != finalEventNumber) {
+                        log.info("기존 라운드의 event_number 업데이트: round={} {}→{}",
+                                targetRound.getId(), targetRound.getEventNumber(), finalEventNumber);
+                        targetRound.updateEventNumber(finalEventNumber);
+                    }
+                } else {
                     targetRound = eventRoundRepository.save(EventRound.builder()
                             .event(event).round(roundName).eventNumber(eventNumber).build());
                     log.info("결과 PDF에서 라운드 자동 생성: event={} round={} eventNumber={}",

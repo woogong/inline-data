@@ -64,4 +64,8 @@ public class EventRound {
         this.eventNumber = eventNumber;
         this.dayNumber = dayNumber;
     }
+
+    public void updateEventNumber(Integer eventNumber) {
+        this.eventNumber = eventNumber;
+    }
 }

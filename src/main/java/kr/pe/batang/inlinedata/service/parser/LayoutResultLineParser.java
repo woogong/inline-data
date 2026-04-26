@@ -191,6 +191,19 @@ public final class LayoutResultLineParser {
             String teamEntryName = parts.length >= 1 ? parts[0].trim() : null;
             String region = parts.length >= 2 ? parts[1].trim() : null;
 
+            // 외국팀처럼 3줄로 wrap된 경우: parts[0]="POWERSLIDE TEAM TAIWAN -", parts[1]="TPE", parts[2]="A 8:38.161"
+            // → team="POWERSLIDE TEAM TAIWAN - A", region="TPE"
+            if (teamEntryName != null && teamEntryName.endsWith("-")
+                    && parts.length >= 3 && region != null
+                    && (region.matches("[A-Z]{3}") || RegionNormalizer.isValidKoreanRegion(region))) {
+                String suffixAndRecord = parts[2].trim();
+                int spaceIdx = suffixAndRecord.indexOf(' ');
+                String suffix = spaceIdx > 0 ? suffixAndRecord.substring(0, spaceIdx) : suffixAndRecord;
+                if (suffix.length() <= 3 && !suffix.matches("^\\d.*") && !TIME_RECORD.matcher(suffix).find()) {
+                    teamEntryName = teamEntryName + " " + suffix;
+                }
+            }
+
             // parts[1]이 시도가 아니라 기록(시간/점수)이라면 region을 null로 되돌려 아래 분리 로직을 태운다.
             if (region != null && (TIME_RECORD.matcher(region).matches() || region.matches("^\\d+$"))) {
                 region = null;
@@ -272,17 +285,16 @@ public final class LayoutResultLineParser {
      * 기준: 다음 비-푸터 라인이 "새 결과 행"이 아니고 시간 기록을 포함하면 continuation으로 간주.
      */
     private static String findTeamRowContinuation(String[] lines, int currentIdx) {
-        for (int j = currentIdx + 1; j < lines.length; j++) {
+        StringBuilder acc = new StringBuilder();
+        for (int j = currentIdx + 1; j < lines.length && j <= currentIdx + 5; j++) {
             String t = lines[j].trim();
             if (t.isEmpty()) continue;
-            if (isFooter(t)) return null;
-            // 다음 결과 행(선택적 Q 접두 + rank 시작)이면 continuation 아님
-            if (LEADING_QUAL_MARK.matcher(t).matches()) return null;
-            if (RESULT_ROW.matcher(t).matches()) return null;
-            // 시간 기록이 포함된 라인이면 wrap된 tail.
-            if (TIME_RECORD.matcher(t).find()) return t;
-            // 그 외에는 continuation 아님 (members 등). 더 진행하지 않음
-            return null;
+            if (isFooter(t)) break;
+            if (LEADING_QUAL_MARK.matcher(t).matches()) break;
+            if (RESULT_ROW.matcher(t).matches()) break;
+            if (acc.length() > 0) acc.append("   ");
+            acc.append(t);
+            if (TIME_RECORD.matcher(t).find()) return acc.toString();
         }
         return null;
     }

@@ -62,6 +62,15 @@ public final class RawResultLineParser {
             "\\s*$"
     );
 
+    /** 조편성 (rank/record 없음): "팀 bib 시도 이름" */
+    private static final Pattern ENTRY_ONLY = Pattern.compile(
+            "^(.+?)\\s+" +
+            "(\\d+)\\s+" +
+            "([A-Z]{3}|[가-힣]{2,3})\\s+" +
+            "(\\D.+?)" +
+            "\\s*$"
+    );
+
     /** DTT 포인트 경기: 정수 기록 필수. "[EL]? 팀 rank bib [Q]? 정수점수 시도 이름" */
     private static final Pattern DTT_INT = Pattern.compile(
             "^(?:(EL|El|DF|DQ|DNS|DNF|DSQ)\\s+)?" +
@@ -133,7 +142,16 @@ public final class RawResultLineParser {
             if (mi.matches()) return toDttInt(mi);
         }
 
-        // 5) RAW_LINE 매칭 결과가 의심스럽더라도 최후 수단으로 사용
+        // 5) 조편성 (rank/record 없음): 시도가 유효한 한국 시도일 때만
+        Matcher me = ENTRY_ONLY.matcher(candidate);
+        if (me.matches()) {
+            String region = me.group(3);
+            if (region.matches("[A-Z]{3}") || RegionNormalizer.isValidKoreanRegion(region)) {
+                return toEntryOnly(me);
+            }
+        }
+
+        // 6) RAW_LINE 매칭 결과가 의심스럽더라도 최후 수단으로 사용
         if (m.matches()) return toRaw(m);
         return null;
     }
@@ -192,6 +210,15 @@ public final class RawResultLineParser {
                 m.group(5), m.group(6), null, m.group(7), m.group(8));
     }
 
+    private static ParsedResult toEntryOnly(Matcher m) {
+        String teamName = m.group(1).trim();
+        int bib;
+        try { bib = Integer.parseInt(m.group(2)); } catch (NumberFormatException e) { return null; }
+        String region = RegionNormalizer.normalize(m.group(3));
+        String name = m.group(4).trim();
+        return new ParsedResult(bib, name, region, teamName, null, null, null, null, null);
+    }
+
     private static ParsedResult buildDtt(String notePrefix, String teamNameRaw, String rankStr, String bibStr,
                                          String qualification, String record, String newRecord,
                                          String region, String athleteNameRaw) {
@@ -200,8 +227,12 @@ public final class RawResultLineParser {
         region = RegionNormalizer.normalize(region);
         Integer ranking = null;
         try { ranking = Integer.parseInt(rankStr); } catch (NumberFormatException ignored) {}
-        String note = composeNote(notePrefix, rankStr, ranking, null);
-        return new ParsedResult(bib, athleteNameRaw.trim(), region, teamNameRaw.trim(),
+        String name = athleteNameRaw.trim();
+        boolean hasW = false;
+        if (name.startsWith("W ")) { name = name.substring(2).trim(); hasW = true; }
+        if (name.endsWith(" W")) { name = name.substring(0, name.length() - 2).trim(); hasW = true; }
+        String note = composeNote(notePrefix, rankStr, ranking, hasW ? "W" : null);
+        return new ParsedResult(bib, name, region, teamNameRaw.trim(),
                 ranking, record, newRecord, qualification, note);
     }
 
