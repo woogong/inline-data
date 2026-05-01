@@ -711,4 +711,11 @@ public class EventService {
 
         return new AthleteProfileInfo(athleteName, region, teamName, athleteId, medalRecords);
     }
+
+    @Transactional
+    public void saveHeatYoutubeUrl(Long heatId, String youtubeUrl) {
+        EventHeat heat = eventHeatRepository.findById(heatId)
+                .orElseThrow(() -> new IllegalArgumentException("조를 찾을 수 없습니다. id=" + heatId));
+        heat.updateYoutubeUrl(youtubeUrl);
+    }
 }

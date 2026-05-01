@@ -82,6 +82,7 @@ public class ApiEventController {
                 Map<String, Object> heatMap = new LinkedHashMap<>();
                 heatMap.put("id", heat.getId());
                 heatMap.put("heatNumber", heat.getHeatNumber());
+                heatMap.put("youtubeUrl", heat.getYoutubeUrl());
                 heatMap.put("entries", results.stream().map(er -> {
                     Map<String, Object> entryMap = new LinkedHashMap<>();
                     HeatEntry he = er.getHeatEntry();
@@ -107,6 +108,7 @@ public class ApiEventController {
                 Map<String, Object> heatMap = new LinkedHashMap<>();
                 heatMap.put("id", heat.getId());
                 heatMap.put("heatNumber", heat.getHeatNumber());
+                heatMap.put("youtubeUrl", heat.getYoutubeUrl());
                 heatMap.put("entries", entries.stream().map(he -> {
                     Map<String, Object> entryMap = new LinkedHashMap<>();
                     entryMap.put("heatEntryId", he.getId());

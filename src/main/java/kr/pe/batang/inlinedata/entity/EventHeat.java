@@ -43,9 +43,16 @@ public class EventHeat {
     @Column(updatable = false)
     private LocalDateTime createdAt;
 
+    @Column(length = 500)
+    private String youtubeUrl;
+
     @Builder
     public EventHeat(EventRound eventRound, Integer heatNumber) {
         this.eventRound = eventRound;
         this.heatNumber = heatNumber;
+    }
+
+    public void updateYoutubeUrl(String youtubeUrl) {
+        this.youtubeUrl = (youtubeUrl == null || youtubeUrl.isBlank()) ? null : youtubeUrl.trim();
     }
 }

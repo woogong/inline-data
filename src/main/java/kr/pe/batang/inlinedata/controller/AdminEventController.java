@@ -211,6 +211,16 @@ public class AdminEventController {
         return Map.of("status", "ok");
     }
 
+    @PostMapping("/{eventId}/rounds/{roundId}/heats/youtube-url")
+    @ResponseBody
+    public Map<String, Object> saveHeatYoutubeUrl(@PathVariable Long compId, @PathVariable Long eventId,
+                                                  @PathVariable Long roundId,
+                                                  @RequestBody Map<String, String> body) {
+        Long heatId = Long.parseLong(body.get("heatId"));
+        eventService.saveHeatYoutubeUrl(heatId, body.get("youtubeUrl"));
+        return Map.of("status", "ok");
+    }
+
     // --- 종목 CRUD ---
 
     @GetMapping("/new")
