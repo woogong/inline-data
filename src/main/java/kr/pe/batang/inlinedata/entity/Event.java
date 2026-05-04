@@ -47,6 +47,9 @@ public class Event {
     @Column(nullable = false)
     private boolean teamEvent;
 
+    @Column(nullable = false)
+    private boolean relayEvent;
+
     @CreatedDate
     @Column(updatable = false)
     private LocalDateTime createdAt;
@@ -56,18 +59,21 @@ public class Event {
 
     @Builder
     public Event(Competition competition, String divisionName, String gender,
-                 String eventName, boolean teamEvent) {
+                 String eventName, boolean teamEvent, boolean relayEvent) {
         this.competition = competition;
         this.divisionName = divisionName;
         this.gender = gender;
         this.eventName = eventName;
         this.teamEvent = teamEvent;
+        this.relayEvent = relayEvent;
     }
 
-    public void update(String divisionName, String gender, String eventName, boolean teamEvent) {
+    public void update(String divisionName, String gender, String eventName,
+                       boolean teamEvent, boolean relayEvent) {
         this.divisionName = divisionName;
         this.gender = gender;
         this.eventName = eventName;
         this.teamEvent = teamEvent;
+        this.relayEvent = relayEvent;
     }
 }

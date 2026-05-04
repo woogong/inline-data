@@ -126,10 +126,19 @@ public class AdminEventController {
     public String roundDetail(@PathVariable Long compId, @PathVariable Long eventId,
                               @PathVariable Long roundId, Model model) {
         model.addAttribute("competition", competitionService.findById(compId));
-        model.addAttribute("event", eventService.findById(eventId));
+        var event = eventService.findById(eventId);
+        model.addAttribute("event", event);
         model.addAttribute("round", eventService.findRoundById(roundId));
-        model.addAttribute("heatsWithEntries", eventService.findHeatsWithEntries(roundId));
+        var heatsWithEntries = eventService.findHeatsWithEntries(roundId);
+        model.addAttribute("heatsWithEntries", heatsWithEntries);
         model.addAttribute("resultByEntryId", eventService.findResultsByEntryId(roundId));
+        if (event.isRelayEvent()) {
+            var heatEntryIds = heatsWithEntries.values().stream()
+                    .flatMap(java.util.List::stream)
+                    .map(kr.pe.batang.inlinedata.entity.HeatEntry::getId).toList();
+            model.addAttribute("relayMembersByHeatEntryId",
+                    entryService.findRelayMembersByHeatEntryIds(heatEntryIds));
+        }
         return "admin/event/round-detail";
     }
 
@@ -155,9 +164,18 @@ public class AdminEventController {
     public String entries(@PathVariable Long compId, @PathVariable Long eventId,
                           @PathVariable Long roundId, Model model) {
         model.addAttribute("competition", competitionService.findById(compId));
-        model.addAttribute("event", eventService.findById(eventId));
+        var event = eventService.findById(eventId);
+        model.addAttribute("event", event);
         model.addAttribute("round", eventService.findRoundById(roundId));
-        model.addAttribute("heatsWithEntries", eventService.findHeatsWithEntries(roundId));
+        var heatsWithEntries = eventService.findHeatsWithEntries(roundId);
+        model.addAttribute("heatsWithEntries", heatsWithEntries);
+        if (event.isRelayEvent()) {
+            var heatEntryIds = heatsWithEntries.values().stream()
+                    .flatMap(java.util.List::stream)
+                    .map(kr.pe.batang.inlinedata.entity.HeatEntry::getId).toList();
+            model.addAttribute("relayMembersByHeatEntryId",
+                    entryService.findRelayMembersByHeatEntryIds(heatEntryIds));
+        }
         return "admin/event/entries";
     }
 
@@ -219,6 +237,41 @@ public class AdminEventController {
         Long heatId = Long.parseLong(body.get("heatId"));
         eventService.saveHeatYoutubeUrl(heatId, body.get("youtubeUrl"));
         return Map.of("status", "ok");
+    }
+
+    // --- 계주 구성 선수 ---
+
+    @PostMapping("/{eventId}/rounds/{roundId}/relay-members/save")
+    @ResponseBody
+    public Map<String, Object> saveRelayMember(@PathVariable Long compId, @PathVariable Long eventId,
+                                               @PathVariable Long roundId,
+                                               @RequestBody Map<String, String> body) {
+        Long heatEntryId = Long.parseLong(body.get("heatEntryId"));
+        String orderStr = body.getOrDefault("orderNumber", "0");
+        int orderNumber = (orderStr == null || orderStr.isBlank()) ? 0 : Integer.parseInt(orderStr);
+        String athleteName = body.get("athleteName");
+        String athleteIdStr = body.get("athleteId");
+        Long athleteId = (athleteIdStr == null || athleteIdStr.isBlank()) ? null : Long.parseLong(athleteIdStr);
+        var member = entryService.addRelayMember(heatEntryId, orderNumber, athleteName, athleteId);
+        return Map.of("status", "ok", "relayMemberId", member.getId(),
+                      "athleteLinked", member.getAthlete() != null);
+    }
+
+    @PostMapping("/{eventId}/rounds/{roundId}/relay-members/delete")
+    @ResponseBody
+    public Map<String, Object> deleteRelayMember(@PathVariable Long compId, @PathVariable Long eventId,
+                                                 @PathVariable Long roundId,
+                                                 @RequestBody Map<String, String> body) {
+        entryService.deleteRelayMember(Long.parseLong(body.get("relayMemberId")));
+        return Map.of("status", "ok");
+    }
+
+    @GetMapping("/{eventId}/rounds/{roundId}/relay-members/suggest-athlete")
+    @ResponseBody
+    public List<Map<String, Object>> suggestAthlete(@PathVariable Long compId, @PathVariable Long eventId,
+                                                    @PathVariable Long roundId,
+                                                    @RequestParam String q) {
+        return entryService.suggestAthletes(q);
     }
 
     // --- 종목 CRUD ---

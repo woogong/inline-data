@@ -1,15 +1,19 @@
 package kr.pe.batang.inlinedata.service;
 
+import kr.pe.batang.inlinedata.entity.Athlete;
 import kr.pe.batang.inlinedata.entity.Competition;
 import kr.pe.batang.inlinedata.entity.CompetitionEntry;
 import kr.pe.batang.inlinedata.entity.Event;
 import kr.pe.batang.inlinedata.entity.EventHeat;
 import kr.pe.batang.inlinedata.entity.EventRound;
 import kr.pe.batang.inlinedata.entity.HeatEntry;
+import kr.pe.batang.inlinedata.entity.RelayTeamMember;
+import kr.pe.batang.inlinedata.repository.AthleteRepository;
 import kr.pe.batang.inlinedata.repository.CompetitionEntryRepository;
 import kr.pe.batang.inlinedata.repository.EventHeatRepository;
 import kr.pe.batang.inlinedata.repository.EventResultRepository;
 import kr.pe.batang.inlinedata.repository.HeatEntryRepository;
+import kr.pe.batang.inlinedata.repository.RelayTeamMemberRepository;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -19,6 +23,7 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
+import java.util.stream.Collectors;
 
 @Service
 @RequiredArgsConstructor
@@ -29,6 +34,8 @@ public class EntryService {
     private final EventHeatRepository eventHeatRepository;
     private final HeatEntryRepository heatEntryRepository;
     private final EventResultRepository eventResultRepository;
+    private final RelayTeamMemberRepository relayTeamMemberRepository;
+    private final AthleteRepository athleteRepository;
 
     @Transactional
     public Long addHeat(EventRound round, int heatNumber) {
@@ -85,6 +92,55 @@ public class EntryService {
     public void deleteEntry(Long heatEntryId) {
         eventResultRepository.findByHeatEntryId(heatEntryId).ifPresent(eventResultRepository::delete);
         heatEntryRepository.deleteById(heatEntryId);
+    }
+
+    // --- 계주 구성 선수 ---
+
+    @Transactional
+    public RelayTeamMember addRelayMember(Long heatEntryId, int orderNumber,
+                                          String athleteName, Long athleteId) {
+        HeatEntry heatEntry = heatEntryRepository.findById(heatEntryId)
+                .orElseThrow(() -> new IllegalArgumentException("엔트리를 찾을 수 없습니다. id=" + heatEntryId));
+        Athlete athlete = null;
+        if (athleteId != null) {
+            athlete = athleteRepository.findById(athleteId).orElse(null);
+        }
+        if (athlete == null) {
+            List<Athlete> found = athleteRepository.findByNameContaining(athleteName.trim());
+            if (found.size() == 1) athlete = found.get(0);
+        }
+        return relayTeamMemberRepository.save(RelayTeamMember.builder()
+                .heatEntry(heatEntry)
+                .orderNumber(orderNumber)
+                .athleteName(athleteName.trim())
+                .athlete(athlete)
+                .build());
+    }
+
+    @Transactional
+    public void deleteRelayMember(Long relayMemberId) {
+        relayTeamMemberRepository.deleteById(relayMemberId);
+    }
+
+    public Map<Long, List<RelayTeamMember>> findRelayMembersByHeatEntryIds(List<Long> heatEntryIds) {
+        if (heatEntryIds.isEmpty()) return Map.of();
+        return relayTeamMemberRepository.findByHeatEntryIdIn(heatEntryIds).stream()
+                .collect(Collectors.groupingBy(m -> m.getHeatEntry().getId()));
+    }
+
+    public List<Map<String, Object>> suggestAthletes(String query) {
+        if (query == null || query.isBlank()) return List.of();
+        return athleteRepository.findByNameContaining(query.trim()).stream()
+                .limit(10)
+                .map(a -> {
+                    Map<String, Object> item = new LinkedHashMap<>();
+                    item.put("id", a.getId());
+                    item.put("name", a.getName());
+                    item.put("gender", a.getGender());
+                    item.put("birthYear", a.getBirthYear());
+                    return item;
+                })
+                .toList();
     }
 
     /**

@@ -41,6 +41,11 @@
         .suggest-item:hover, .suggest-item.active { background: #e8f4fd; }
         .suggest-item .sub { color: #888; font-size: 0.8rem; }
         .name-cell { position: relative; }
+        .relay-section { background: #f9f9f9; border: 1px solid #e8e8e8; border-radius: 4px; padding: 0.5rem 0.8rem; margin-top: 0.5rem; }
+        .relay-section .relay-label { font-size: 0.8rem; font-weight: 600; color: #555; margin-bottom: 0.3rem; }
+        .relay-member-row td { border-color: #eee; font-size: 0.85rem; }
+        .relay-member-row input { font-size: 0.85rem; }
+        .linked-icon { color: #27ae60; font-size: 0.8rem; }
     </style>
 </head>
 <body>
@@ -66,13 +71,36 @@
                 <table>
                     <thead><tr><th style="width:70px">참가번호</th><th style="width:120px">이름</th><th style="width:80px">지역</th><th>팀명</th><th style="width:80px"></th></tr></thead>
                     <tbody>
-                        <tr th:each="he : ${heatEntry.value}" class="entry-row existing" th:attr="data-heat-entry-id=${he.id}">
+                        <th:block th:each="he : ${heatEntry.value}">
+                        <tr class="entry-row existing" th:attr="data-heat-entry-id=${he.id}">
                             <td><input type="text" data-field="bibNumber" th:value="${he.bibNumber}" style="width:50px; text-align:center;" readonly></td>
                             <td><input type="text" data-field="name" th:value="${he.entry.athleteName}" readonly></td>
                             <td><input type="text" data-field="region" th:value="${he.entry.region}" readonly></td>
                             <td><input type="text" data-field="teamName" th:value="${he.entry.teamName}" readonly></td>
                             <td style="text-align:center;"><button type="button" class="btn btn-danger btn-sm delete-entry-btn">X</button> <span class="status-icon"></span></td>
                         </tr>
+                        <tr th:if="${event.relayEvent}">
+                            <td colspan="5" style="padding:0.4rem 0.5rem; background:#fafafa;">
+                                <div class="relay-section" th:attr="data-heat-entry-id=${he.id}">
+                                    <div class="relay-label">구성 선수</div>
+                                    <table style="margin:0;">
+                                        <thead><tr><th style="width:40px">순서</th><th>이름</th><th style="width:30px"></th><th style="width:40px"></th></tr></thead>
+                                        <tbody class="relay-member-tbody">
+                                            <tr th:each="m : ${relayMembersByHeatEntryId != null ? relayMembersByHeatEntryId[he.id] : null}"
+                                                class="relay-member-row" th:attr="data-relay-member-id=${m.id}">
+                                                <td th:text="${m.orderNumber == 0 ? '-' : m.orderNumber}" style="text-align:center;"></td>
+                                                <td th:text="${m.athleteName}"></td>
+                                                <td class="linked-icon" th:text="${m.athlete != null ? '✓' : ''}"></td>
+                                                <td><button type="button" class="btn btn-danger btn-sm delete-relay-btn">X</button></td>
+                                            </tr>
+                                        </tbody>
+                                    </table>
+                                    <button type="button" class="btn btn-add btn-sm add-relay-btn" style="margin-top:0.3rem;"
+                                            th:attr="data-heat-entry-id=${he.id}">+ 구성 선수</button>
+                                </div>
+                            </td>
+                        </tr>
+                        </th:block>
                     </tbody>
                 </table>
             </div>
@@ -207,6 +235,97 @@
         }
 
         document.querySelectorAll('.heat-section').forEach(bindHeatSection);
+
+        // --- 계주 구성 선수 ---
+        const IS_RELAY_EVENT = /*[[${event.relayEvent}]]*/ false;
+        const RELAY_SAVE_URL   = BASE + '/relay-members/save';
+        const RELAY_DELETE_URL = BASE + '/relay-members/delete';
+        const RELAY_SUGGEST_URL = BASE + '/relay-members/suggest-athlete';
+
+        function addRelayMemberRow(section) {
+            const heatEntryId = section.dataset.heatEntryId;
+            const tbody = section.querySelector('.relay-member-tbody');
+            const tr = document.createElement('tr');
+            tr.className = 'relay-member-row new-relay-row';
+            tr.innerHTML = `<td><input type="number" class="relay-order" min="0" max="20" style="width:36px; text-align:center;" placeholder="순서" value="0"></td>
+                <td class="name-cell" style="position:relative;">
+                    <input type="text" class="relay-name" placeholder="이름" autocomplete="off">
+                    <input type="hidden" class="relay-athlete-id">
+                </td>
+                <td class="linked-icon"></td>
+                <td style="white-space:nowrap;">
+                    <button type="button" class="btn btn-save btn-sm save-relay-btn">저장</button>
+                    <button type="button" class="btn btn-danger btn-sm cancel-relay-btn">X</button>
+                </td>`;
+            tbody.appendChild(tr);
+            const nameInput = tr.querySelector('.relay-name');
+            const idInput = tr.querySelector('.relay-athlete-id');
+            bindRelayAthleteAutocomplete(nameInput, idInput, tr.querySelector('.linked-icon'));
+            tr.querySelector('.save-relay-btn').addEventListener('click', () => saveRelayMember(tr, heatEntryId, section));
+            tr.querySelector('.cancel-relay-btn').addEventListener('click', () => tr.remove());
+            nameInput.focus();
+        }
+
+        function saveRelayMember(tr, heatEntryId, section) {
+            const athleteName = tr.querySelector('.relay-name').value.trim();
+            if (!athleteName) return;
+            const orderNumber = parseInt(tr.querySelector('.relay-order').value) || 0;
+            const athleteId = tr.querySelector('.relay-athlete-id').value || '';
+            fetch(RELAY_SAVE_URL, {
+                method: 'POST', headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ heatEntryId, orderNumber: String(orderNumber), athleteName, athleteId })
+            }).then(r => r.json()).then(data => {
+                if (data.status !== 'ok') return;
+                const newTr = document.createElement('tr');
+                newTr.className = 'relay-member-row';
+                newTr.dataset.relayMemberId = data.relayMemberId;
+                newTr.innerHTML = `<td style="text-align:center;">${orderNumber === 0 ? '-' : orderNumber}</td>
+                    <td>${escHtml(athleteName)}</td>
+                    <td class="linked-icon">${data.athleteLinked ? '✓' : ''}</td>
+                    <td><button type="button" class="btn btn-danger btn-sm delete-relay-btn">X</button></td>`;
+                newTr.querySelector('.delete-relay-btn').addEventListener('click', () => deleteRelayMember(newTr));
+                section.querySelector('.relay-member-tbody').appendChild(newTr);
+                tr.remove();
+            });
+        }
+
+        function deleteRelayMember(tr) {
+            const id = tr.dataset.relayMemberId;
+            if (!id || !confirm('삭제하시겠습니까?')) return;
+            fetch(RELAY_DELETE_URL, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ relayMemberId: id }) })
+            .then(r => { if (r.ok) tr.remove(); });
+        }
+
+        function bindRelayAthleteAutocomplete(input, idInput, linkedIcon) {
+            let list = null, activeIdx = -1;
+            function close() { if (list) { list.remove(); list = null; } activeIdx = -1; }
+            input.addEventListener('input', () => {
+                idInput.value = ''; linkedIcon.textContent = '';
+                const q = input.value.trim();
+                if (!q) { close(); return; }
+                clearTimeout(suggestTimer);
+                suggestTimer = setTimeout(() => {
+                    fetch(RELAY_SUGGEST_URL + '?q=' + encodeURIComponent(q)).then(r => r.json()).then(items => {
+                        close();
+                        if (!items.length) return;
+                        list = document.createElement('div'); list.className = 'suggest-list';
+                        items.forEach(a => {
+                            const d = document.createElement('div'); d.className = 'suggest-item';
+                            d.innerHTML = `<b>${escHtml(a.name)}</b> <span class="sub">${a.gender === 'M' ? '남' : '여'}${a.birthYear ? ' ' + a.birthYear : ''}</span>`;
+                            d.addEventListener('click', () => { input.value = a.name; idInput.value = a.id; linkedIcon.textContent = '✓'; close(); });
+                            list.appendChild(d);
+                        });
+                        input.closest('.name-cell').appendChild(list);
+                    });
+                }, 200);
+            });
+            input.addEventListener('blur', () => setTimeout(close, 200));
+        }
+
+        document.querySelectorAll('.relay-section').forEach(section => {
+            section.querySelector('.add-relay-btn').addEventListener('click', () => addRelayMemberRow(section));
+            section.querySelectorAll('.delete-relay-btn').forEach(btn => btn.addEventListener('click', () => deleteRelayMember(btn.closest('.relay-member-row'))));
+        });
     </script>
 </body>
 </html>

@@ -68,15 +68,16 @@
                             type="button">▶ 경기 영상</button>
                 </div>
                 <table>
-                    <thead><tr><th style="width:50px">순위</th><th style="width:60px">배번</th><th>선수명</th><th>소속</th><th>기록</th><th style="width:60px">진출</th><th>비고</th></tr></thead>
+                    <thead><tr><th style="width:50px">순위</th><th style="width:60px">배번</th><th>팀명</th><th>소속</th><th>기록</th><th style="width:60px">진출</th><th>비고</th></tr></thead>
                     <tbody>
-                        <tr th:each="er : ${heatEntry.value}"
-                            th:classappend="${isFinal
+                        <th:block th:each="er : ${heatEntry.value}">
+                        <tr th:classappend="${isFinal
                                 ? (er.ranking == 1 ? 'rank-1' : (er.ranking == 2 ? 'rank-2' : (er.ranking == 3 ? 'rank-3' : '')))
                                 : (er.qualification != null ? 'qualified' : 'not-qualified')}">
                             <td th:text="${er.ranking}"></td>
                             <td th:text="${er.heatEntry.bibNumber}"></td>
-                            <td><span class="athlete-link" th:text="${er.heatEntry.entry.athleteName}" th:attr="data-name=${er.heatEntry.entry.athleteName}"></span></td>
+                            <td><span th:if="${!event.relayEvent}" class="athlete-link" th:text="${er.heatEntry.entry.athleteName}" th:attr="data-name=${er.heatEntry.entry.athleteName}"></span>
+                                <span th:if="${event.relayEvent}" th:text="${er.heatEntry.entry.athleteName}"></span></td>
                             <td>
                                 <span th:if="${er.heatEntry.entry.region != null}" th:text="${er.heatEntry.entry.region}"></span>
                                 <span th:if="${er.heatEntry.entry.region != null && er.heatEntry.entry.teamName != null}"> </span>
@@ -90,6 +91,14 @@
                             <td><span th:if="${er.qualification != null}" class="q-mark" th:text="${er.qualification}"></span></td>
                             <td><span th:if="${er.note != null}" class="note" th:text="${er.note}"></span></td>
                         </tr>
+                        <tr th:if="${event.relayEvent and relayMembersByHeatEntryId != null and relayMembersByHeatEntryId[er.heatEntry.id] != null}">
+                            <td colspan="7" style="padding:0.2rem 1rem; background:inherit; border-top:none; font-size:0.85rem; color:#555;">
+                                <th:block th:each="m, mStat : ${relayMembersByHeatEntryId[er.heatEntry.id]}">
+                                    <span th:text="(${m.orderNumber > 0 ? m.orderNumber + '. ' : ''}) + ${m.athleteName}"></span><span th:if="${!mStat.last}"> &middot; </span>
+                                </th:block>
+                            </td>
+                        </tr>
+                        </th:block>
                     </tbody>
                 </table>
             </div>
@@ -106,11 +115,13 @@
                             type="button">▶ 경기 영상</button>
                 </div>
                 <table>
-                    <thead><tr><th style="width:60px">배번</th><th>선수명</th><th>소속</th><th>학년</th></tr></thead>
+                    <thead><tr><th style="width:60px">배번</th><th>팀명</th><th>소속</th><th>학년</th></tr></thead>
                     <tbody>
-                        <tr th:each="he : ${heatEntry.value}">
+                        <th:block th:each="he : ${heatEntry.value}">
+                        <tr>
                             <td th:text="${he.bibNumber}"></td>
-                            <td><span class="athlete-link" th:text="${he.entry.athleteName}" th:attr="data-name=${he.entry.athleteName}"></span></td>
+                            <td><span th:if="${!event.relayEvent}" class="athlete-link" th:text="${he.entry.athleteName}" th:attr="data-name=${he.entry.athleteName}"></span>
+                                <span th:if="${event.relayEvent}" th:text="${he.entry.athleteName}"></span></td>
                             <td>
                                 <span th:if="${he.entry.region != null}" th:text="${he.entry.region}"></span>
                                 <span th:if="${he.entry.region != null && he.entry.teamName != null}"> </span>
@@ -118,6 +129,14 @@
                             </td>
                             <td th:text="${he.entry.grade}"></td>
                         </tr>
+                        <tr th:if="${event.relayEvent and relayMembersByHeatEntryId != null and relayMembersByHeatEntryId[he.id] != null}">
+                            <td colspan="4" style="padding:0.2rem 1rem; background:inherit; border-top:none; font-size:0.85rem; color:#555;">
+                                <th:block th:each="m, mStat : ${relayMembersByHeatEntryId[he.id]}">
+                                    <span th:text="(${m.orderNumber > 0 ? m.orderNumber + '. ' : ''}) + ${m.athleteName}"></span><span th:if="${!mStat.last}"> &middot; </span>
+                                </th:block>
+                            </td>
+                        </tr>
+                        </th:block>
                     </tbody>
                 </table>
             </div>

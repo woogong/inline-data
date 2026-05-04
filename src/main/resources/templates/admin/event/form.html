@@ -54,6 +54,16 @@
                     <div class="error" th:if="${#fields.hasErrors('eventName')}" th:errors="*{eventName}"></div>
                 </div>
             </div>
+            <div class="form-row" style="margin-bottom:1rem;">
+                <div style="display:flex; align-items:center; gap:1.5rem;">
+                    <label style="display:flex; align-items:center; gap:0.4rem; font-weight:600; cursor:pointer;">
+                        <input type="checkbox" th:field="*{teamEvent}"> 단체전
+                    </label>
+                    <label style="display:flex; align-items:center; gap:0.4rem; font-weight:600; cursor:pointer;">
+                        <input type="checkbox" th:field="*{relayEvent}"> 계주
+                    </label>
+                </div>
+            </div>
             <div class="actions">
                 <button type="submit" class="btn btn-primary" th:text="${dto.id != null} ? '수정' : '등록'">저장</button>
                 <a th:href="${dto.id != null} ? @{/admin/competitions/{compId}/events/{eventId}(compId=${competition.id}, eventId=${dto.id})} : @{/admin/competitions/{compId}/events(compId=${competition.id})}"

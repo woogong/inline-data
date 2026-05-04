@@ -78,7 +78,8 @@
                         </tr>
                     </thead>
                     <tbody>
-                        <tr th:each="he : ${heatEntry.value}" class="result-row" th:attr="data-entry-id=${he.id}">
+                        <th:block th:each="he : ${heatEntry.value}">
+                        <tr class="result-row" th:attr="data-entry-id=${he.id}">
                             <td class="readonly" th:text="${he.bibNumber}"></td>
                             <td class="readonly" th:text="${he.entry.athleteName}"></td>
                             <td class="readonly">
@@ -103,6 +104,14 @@
                             </th:block>
                             <td><span class="status-icon"></span></td>
                         </tr>
+                        <tr th:if="${event.relayEvent and relayMembersByHeatEntryId != null and relayMembersByHeatEntryId[he.id] != null}">
+                            <td colspan="9" style="padding:0.2rem 0.8rem; background:#f8f8f8; border-top:none; font-size:0.8rem; color:#555;">
+                                <th:block th:each="m, mStat : ${relayMembersByHeatEntryId[he.id]}">
+                                    <span th:text="(${m.orderNumber > 0 ? m.orderNumber + '. ' : ''}) + ${m.athleteName}"></span><span th:if="${m.athlete != null}" style="color:#27ae60;"> ✓</span><span th:if="${!mStat.last}"> &middot; </span>
+                                </th:block>
+                            </td>
+                        </tr>
+                        </th:block>
                     </tbody>
                 </table>
             </th:block>

@@ -28,6 +28,8 @@ public class EventFormDto {
 
     private boolean teamEvent;
 
+    private boolean relayEvent;
+
     public Event toEntity(Competition competition) {
         return Event.builder()
                 .competition(competition)
@@ -35,6 +37,7 @@ public class EventFormDto {
                 .gender(gender)
                 .eventName(eventName)
                 .teamEvent(teamEvent)
+                .relayEvent(relayEvent)
                 .build();
     }
 
@@ -45,6 +48,7 @@ public class EventFormDto {
         dto.setGender(event.getGender());
         dto.setEventName(event.getEventName());
         dto.setTeamEvent(event.isTeamEvent());
+        dto.setRelayEvent(event.isRelayEvent());
         return dto;
     }
 }

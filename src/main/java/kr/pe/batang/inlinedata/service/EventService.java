@@ -518,7 +518,8 @@ public class EventService {
     @Transactional
     public Event update(Long id, EventFormDto dto) {
         Event event = findById(id);
-        event.update(dto.getDivisionName(), dto.getGender(), dto.getEventName(), dto.isTeamEvent());
+        event.update(dto.getDivisionName(), dto.getGender(), dto.getEventName(),
+                dto.isTeamEvent(), dto.isRelayEvent());
         return event;
     }
 

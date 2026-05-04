@@ -3,7 +3,9 @@ package kr.pe.batang.inlinedata.controller;
 import java.util.List;
 import kr.pe.batang.inlinedata.entity.Event;
 import kr.pe.batang.inlinedata.entity.EventRound;
+import kr.pe.batang.inlinedata.entity.HeatEntry;
 import kr.pe.batang.inlinedata.service.CompetitionService;
+import kr.pe.batang.inlinedata.service.EntryService;
 import kr.pe.batang.inlinedata.service.EventService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Controller;
@@ -19,6 +21,7 @@ public class EventController {
 
     private final EventService eventService;
     private final CompetitionService competitionService;
+    private final EntryService entryService;
 
     @GetMapping
     public String list(@PathVariable Long compId, Model model) {
@@ -49,16 +52,29 @@ public class EventController {
                               @PathVariable Long roundId, Model model) {
         EventRound round = eventService.findRoundById(roundId);
         model.addAttribute("competition", competitionService.findById(compId));
-        model.addAttribute("event", eventService.findById(eventId));
+        Event event = eventService.findById(eventId);
+        model.addAttribute("event", event);
         model.addAttribute("round", round);
         boolean isFinal = "결승".equals(round.getRound()) || "조별결승".equals(round.getRound());
         model.addAttribute("isFinal", isFinal);
         boolean hasResults = eventService.hasResults(roundId);
         model.addAttribute("hasResults", hasResults);
+        List<Long> heatEntryIds;
         if (hasResults) {
-            model.addAttribute("heatsWithResults", eventService.findHeatsWithResults(roundId));
+            var heatsWithResults = eventService.findHeatsWithResults(roundId);
+            model.addAttribute("heatsWithResults", heatsWithResults);
+            heatEntryIds = heatsWithResults.values().stream()
+                    .flatMap(List::stream)
+                    .map(er -> er.getHeatEntry().getId()).toList();
         } else {
-            model.addAttribute("heatsWithEntries", eventService.findHeatsWithEntries(roundId));
+            var heatsWithEntries = eventService.findHeatsWithEntries(roundId);
+            model.addAttribute("heatsWithEntries", heatsWithEntries);
+            heatEntryIds = heatsWithEntries.values().stream()
+                    .flatMap(List::stream).map(HeatEntry::getId).toList();
+        }
+        if (event.isRelayEvent()) {
+            model.addAttribute("relayMembersByHeatEntryId",
+                    entryService.findRelayMembersByHeatEntryIds(heatEntryIds));
         }
         return "event/round-detail";
     }
