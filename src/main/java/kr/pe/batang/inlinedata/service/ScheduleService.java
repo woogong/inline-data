@@ -1,6 +1,7 @@
 package kr.pe.batang.inlinedata.service;
 
 import kr.pe.batang.inlinedata.entity.Competition;
+import kr.pe.batang.inlinedata.entity.EventRound;
 import kr.pe.batang.inlinedata.entity.ScheduleEntry;
 import kr.pe.batang.inlinedata.repository.CompetitionRepository;
 import kr.pe.batang.inlinedata.repository.ScheduleEntryRepository;
@@ -23,7 +24,8 @@ public class ScheduleService {
     public record ScheduleEntryDto(Integer orderNumber, String startTime, String divisionName,
                                     String eventName, String roundType, String heatInfo,
                                     Integer quarterFinalRef, Integer semiFinalRef, Integer finalRef,
-                                    String entryType, String notes) {}
+                                    String entryType, String notes,
+                                    Long eventId, Long roundId) {}
 
     public record DaySchedule(int dayNumber, LocalDate date, String dayLabel, List<ScheduleEntryDto> entries) {}
 
@@ -99,10 +101,14 @@ public class ScheduleService {
     }
 
     private ScheduleEntryDto toDto(ScheduleEntry e) {
+        EventRound round = e.getEventRound();
+        Long roundId = round != null ? round.getId() : null;
+        Long eventId = round != null ? round.getEvent().getId() : null;
         return new ScheduleEntryDto(e.getOrderNumber(), e.getStartTime(), e.getDivisionName(),
                 e.getEventName(), e.getRoundType(), e.getHeatInfo(),
                 e.getQuarterFinalRef(), e.getSemiFinalRef(), e.getFinalRef(),
-                e.getEntryType(), e.getNotes());
+                e.getEntryType(), e.getNotes(),
+                eventId, roundId);
     }
 
     private String buildDayLabel(int dayNumber, LocalDate date) {
